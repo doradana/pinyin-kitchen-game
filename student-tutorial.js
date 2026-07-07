@@ -168,7 +168,7 @@
         </div>`,
       pan: `
         <div class="tutorial-scene">
-          <img class="scene-pan pan-wiggle" src="assets/pan.png" alt="">
+          <img class="scene-pan pan-wiggle" src="assets/pan.svg" alt="">
           <span class="pan-bowl-zone" aria-hidden="true">
             <span class="tutorial-word result-pop pan-result">一</span>
           </span>
@@ -178,7 +178,7 @@
         </div>`,
       board: `
         <div class="tutorial-scene">
-          <img class="scene-board board-slice" src="assets/board.png" alt="">
+          <img class="scene-board board-slice" src="assets/board.svg" alt="">
           <span class="tutorial-word word-slice" style="left:226px;top:70px;">三</span>
           <span class="tutorial-food split-s" style="left:40px;top:132px;">s</span>
           <span class="tutorial-food split-a" style="left:106px;top:132px;">a</span>
@@ -196,7 +196,7 @@
         </div>`,
       serve: `
         <div class="tutorial-scene">
-          <img class="scene-plate" src="assets/plate.png" alt="">
+          <img class="scene-plate" src="assets/plate.svg" alt="">
           <span class="tutorial-word serve-drop" style="left:116px;top:54px;">一</span>
         </div>`
     };
