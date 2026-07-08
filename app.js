@@ -115,6 +115,9 @@ const sessionModeKey = "pinyinKitchenMode";
 const sessionPlayerKey = "pinyinKitchenPlayer";
 const sessionGroupKey = "pinyinKitchenGroup";
 const DEFAULT_FOOD_DROP_SECONDS = 15;
+const MAX_TABLE_INGREDIENTS = 32;
+const COLLISION_NEARBY_MARGIN = 96;
+const COLLISION_MAX_OBJECTS = 18;
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("pinyin-kitchen") : null;
 const remoteSync = location.protocol.startsWith("http");
 let remoteBase = "";
@@ -313,7 +316,7 @@ async function initRemoteSync() {
   } catch {
     el.syncStatus.textContent = "本機同步未連線";
   }
-  window.setInterval(pullRemoteState, 850);
+  window.setInterval(pullRemoteState, 1500);
 }
 
 async function fetchRemoteState() {
@@ -1932,8 +1935,12 @@ function dropTimedIngredients() {
 }
 
 function addFallingIngredients(kitchen, count) {
+  trimTableIngredients(kitchen);
+  const openSlots = Math.max(0, MAX_TABLE_INGREDIENTS - kitchen.ingredients.length);
+  if (!openSlots) return;
+  const dropCount = Math.min(count, openSlots);
   const occupied = tableObstacleRects(kitchen.ingredients);
-  for (let index = 0; index < count; index += 1) {
+  for (let index = 0; index < dropCount; index += 1) {
     const item = makeRandomIngredient(kitchen);
     const width = item.type === "tone" ? 52 : 64;
     const position = randomDropPosition(width, 52, occupied);
@@ -1944,6 +1951,15 @@ function addFallingIngredients(kitchen, count) {
     kitchen.ingredients.push(item);
     occupied.push({ x: position.x, y: position.y, width, height: 52 });
   }
+}
+
+function trimTableIngredients(kitchen) {
+  if (!kitchen?.ingredients || kitchen.ingredients.length <= MAX_TABLE_INGREDIENTS) return;
+  const keepCount = Math.max(0, MAX_TABLE_INGREDIENTS - 3);
+  kitchen.ingredients = kitchen.ingredients
+    .slice()
+    .sort((a, b) => Number(b.entryAt || 0) - Number(a.entryAt || 0))
+    .slice(0, keepCount);
 }
 
 function makeRandomIngredient(kitchen) {
@@ -2237,7 +2253,15 @@ function tableObjects(excluded = {}) {
         height: Math.round(rect.height)
       };
     });
-  return [...foodObjects, ...stationObjects];
+  let objects = [...foodObjects, ...stationObjects];
+  if (Number.isFinite(excluded.x) && Number.isFinite(excluded.y)) {
+    const nearbyRect = expandedRect(excluded, COLLISION_NEARBY_MARGIN);
+    objects = objects
+      .filter((object) => overlapsAny(tableObjectRect(object), [nearbyRect]))
+      .sort((a, b) => distanceSquared(centerPoint(a), centerPoint(excluded)) - distanceSquared(centerPoint(b), centerPoint(excluded)))
+      .slice(0, COLLISION_MAX_OBJECTS);
+  }
+  return objects;
 }
 
 function pushOverlappingObjects(dragged, dx = 0, dy = 0) {
@@ -2331,6 +2355,22 @@ function tableObjectRect(object) {
     y: object.y,
     width: object.width,
     height: object.height
+  };
+}
+
+function expandedRect(rect, margin) {
+  return {
+    x: rect.x - margin,
+    y: rect.y - margin,
+    width: rect.width + margin * 2,
+    height: rect.height + margin * 2
+  };
+}
+
+function centerPoint(rect) {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2
   };
 }
 
