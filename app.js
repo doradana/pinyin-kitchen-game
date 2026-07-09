@@ -1466,6 +1466,8 @@ function attachTilePointerHandlers(tile, itemId) {
   let tileHeight = 52;
   let pendingPush = null;
   let pushFrame = null;
+  let dragSourceName = null;
+  let pulledFromCookware = false;
   tile.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     active = true;
@@ -1476,6 +1478,8 @@ function attachTilePointerHandlers(tile, itemId) {
     tileHeight = tileRect.height;
     startX = event.clientX;
     startY = event.clientY;
+    dragSourceName = getItemSourceName(itemId);
+    pulledFromCookware = dragSourceName && dragSourceName !== "ingredients";
     draggedId = itemId;
     selectedId = null;
     tile.classList.add("dragging");
@@ -1504,10 +1508,14 @@ function attachTilePointerHandlers(tile, itemId) {
     if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
     moved = true;
     const tray = el.ingredientTray;
-    if (tile.parentElement !== tray) {
-      tray.append(tile);
-    }
     const kitchenRect = document.querySelector(".kitchen").getBoundingClientRect();
+    if (tile.parentElement !== tray) {
+      const tileRect = tile.getBoundingClientRect();
+      tray.append(tile);
+      tile.style.position = "absolute";
+      tile.style.left = `${Math.round(tileRect.left - kitchenRect.left)}px`;
+      tile.style.top = `${Math.round(tileRect.top - kitchenRect.top)}px`;
+    }
     const position = clampToWorkArea(
       event.clientX - kitchenRect.left - tileWidth / 2,
       event.clientY - kitchenRect.top - tileHeight / 2,
@@ -1518,14 +1526,16 @@ function attachTilePointerHandlers(tile, itemId) {
     tile.style.left = `${Math.round(position.x)}px`;
     tile.style.top = `${Math.round(position.y)}px`;
     tile.style.zIndex = "29";
-    schedulePreviewPush({
-      kind: "food",
-      id: itemId,
-      x: position.x,
-      y: position.y,
-      width: tileWidth,
-      height: tileHeight
-    }, dx, dy);
+    if (!pulledFromCookware) {
+      schedulePreviewPush({
+        kind: "food",
+        id: itemId,
+        x: position.x,
+        y: position.y,
+        width: tileWidth,
+        height: tileHeight
+      }, dx, dy);
+    }
     setTransferGuideState(transferDirectionFromTile(tile));
   }
   tile.addEventListener("pointerup", (event) => {
@@ -1558,7 +1568,7 @@ function attachTilePointerHandlers(tile, itemId) {
     }
     if (moved) {
       tile.dataset.swiped = "true";
-      moveItemToTable(itemId, currentTilePosition(tile));
+      moveItemToTable(itemId, currentTilePosition(tile), { nearbyOnly: pulledFromCookware });
       clearPreviewPushes();
     }
   });
@@ -1575,6 +1585,8 @@ function attachTilePointerHandlers(tile, itemId) {
     document.querySelector(".kitchen").classList.remove("dragging-food");
     setTransferGuideState(0);
     clearPreviewPushes();
+    dragSourceName = null;
+    pulledFromCookware = false;
   });
 }
 
@@ -1643,7 +1655,7 @@ function findKitchenItem(kitchen, itemId) {
   return null;
 }
 
-function moveItemToTable(itemId, position) {
+function moveItemToTable(itemId, position, options = {}) {
   const group = getGroup();
   const kitchen = ensurePlayerKitchen(group, getPlayerName());
   const found = findKitchenItem(kitchen, itemId);
@@ -1651,12 +1663,17 @@ function moveItemToTable(itemId, position) {
   const [item] = kitchen[found.sourceName].splice(found.index, 1);
   const width = item.type === "tone" ? 52 : 64;
   const intendedPosition = clampToWorkArea(position.x, position.y, width, 52);
+  let occupied = tableObstacleRects(kitchen.ingredients);
+  if (options.nearbyOnly) {
+    const nearbyRect = expandedRect({ ...intendedPosition, width, height: 52 }, COLLISION_NEARBY_MARGIN);
+    occupied = occupied.filter((rect) => overlapsAny(rect, [nearbyRect]));
+  }
   const finalPosition = nearestOpenPosition(
     intendedPosition.x,
     intendedPosition.y,
     width,
     52,
-    tableObstacleRects(kitchen.ingredients)
+    occupied
   );
   item.x = finalPosition.x;
   item.y = finalPosition.y;
