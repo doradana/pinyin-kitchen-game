@@ -581,6 +581,7 @@ label,
   cursor: grabbing;
   opacity: 0.45;
   transition: none !important;
+  will-change: left, top;
 }
 
 .tile.selected {
