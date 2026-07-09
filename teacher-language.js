@@ -301,7 +301,8 @@
       const playerLine = card.querySelector("header + p");
       if (playerLine) {
         const content = playerLine.textContent.replace(/^.*?[：:]\s*/, "").trim();
-        setText(playerLine, `${langCopy.players}: ${translateToolText(content || langCopy.notJoined, langCopy)}`);
+        const translatedContent = translateNotJoined(translateToolText(content || langCopy.notJoined, langCopy), langCopy);
+        setText(playerLine, `${langCopy.players}: ${translatedContent}`);
       }
 
       const logLine = card.querySelector("header + p + p");
@@ -340,7 +341,24 @@
       });
 
       card.querySelectorAll(".mini-empty").forEach((empty) => setText(empty, langCopy.empty));
+      card.querySelectorAll(".student-monitor-empty").forEach((empty) => {
+        setText(empty, emptyGroupText(getLanguage()));
+      });
     });
+  }
+
+  function translateNotJoined(value, langCopy) {
+    return /尚未加入|Not joined|未参加|Chưa tham gia/u.test(String(value).trim()) ? langCopy.notJoined : value;
+  }
+
+  function emptyGroupText(language) {
+    return {
+      "zh-Hant": "尚未有學生加入這一組",
+      "zh-Hans": "尚未有学生加入这一组",
+      en: "No students have joined this group yet",
+      ja: "このグループにはまだ学生がいません",
+      vi: "Chưa có học sinh nào tham gia nhóm này"
+    }[language] || "尚未有學生加入這一組";
   }
 
   function translateNone(value, langCopy) {
