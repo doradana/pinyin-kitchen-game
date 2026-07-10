@@ -2568,6 +2568,7 @@ function joinGroup() {
     group.players.push(player);
   }
   const kitchen = ensurePlayerKitchen(group, player);
+  assignToolsForGroup(group);
   if (!kitchen.ingredients.length) {
     kitchen.ingredients = group.ingredients.length
       ? group.ingredients.splice(0, 6)
@@ -2632,17 +2633,20 @@ function assignToolForPlayer(group, player) {
 }
 
 function assignToolsForGroup(group) {
-  const shuffledPlayers = shuffle(group.players);
-  shuffledPlayers.forEach((player, index) => {
+  const players = (group.players || []).filter(Boolean);
+  if (!players.length) return;
+  const firstExistingTool = group.playerKitchens?.[players[0]]?.tool;
+  const firstTool = ["pot", "board"].includes(firstExistingTool)
+    ? firstExistingTool
+    : (Math.random() < 0.5 ? "pot" : "board");
+  players.forEach((player, index) => {
     const kitchen = ensurePlayerKitchen(group, player);
-    if (shuffledPlayers.length === 1) {
-      kitchen.tool = Math.random() < 0.5 ? "pot" : "board";
-    } else if (index === 0) {
-      kitchen.tool = Math.random() < 0.5 ? "pot" : "board";
-    } else if (index === 1) {
-      kitchen.tool = shuffledPlayers.length > 1 && group.playerKitchens[shuffledPlayers[0]].tool === "pot" ? "board" : "pot";
+    if (players.length === 1) {
+      kitchen.tool = firstTool;
+    } else if (index % 2 === 0) {
+      kitchen.tool = firstTool;
     } else {
-      kitchen.tool = assignToolForPlayer(group, player);
+      kitchen.tool = firstTool === "pot" ? "board" : "pot";
     }
   });
 }
