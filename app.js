@@ -792,7 +792,7 @@ function joinGroup() {
   const kitchen = ensurePlayerKitchen(group, player);
   kitchen.tool = el.toolSelect.value;
   if (!kitchen.ingredients.length) {
-    kitchen.ingredients = group.ingredients.length ? group.ingredients.splice(0, 6) : createStarterIngredients(state.lesson, state.answerScript).slice(0, 6);
+    kitchen.ingredients = createStarterIngredients(activeDropSources(kitchen), state.answerScript).slice(0, 6);
   }
   group.log = `${player} 加入 ${group.name}，使用${toolName(kitchen.tool)}，每人都有盤子`;
   saveState();
@@ -993,7 +993,7 @@ function startRound() {
   state.groups.forEach((group) => {
     group.score = 0;
     group.log = "回合開始，快點備菜！";
-    group.ingredients = createStarterIngredients(state.lesson, state.answerScript);
+    group.ingredients = [];
     group.playerKitchens = {};
     group.players.forEach((player, index) => {
       const kitchen = ensurePlayerKitchen(group, player);
@@ -1001,11 +1001,11 @@ function startRound() {
       kitchen.score = 0;
       kitchen.lastFoodDropAt = Date.now();
       kitchen.toneQueue = [];
-      kitchen.ingredients = createStarterIngredients(state.lesson, state.answerScript).slice(0, 6);
+      kitchen.orders = nextSingleOrderForPlayer(group, player);
+      kitchen.ingredients = createStarterIngredients(activeDropSources(kitchen), state.answerScript).slice(0, 6);
       kitchen.pot = [];
       kitchen.board = [];
       kitchen.plate = [];
-      kitchen.orders = nextSingleOrderForPlayer(group, player);
     });
     group.pot = [];
     group.board = [];
@@ -2474,13 +2474,14 @@ function ensurePlayerKitchen(group, player) {
     group.players.push(player);
   }
   if (!group.playerKitchens[player]) {
+    const orders = nextSingleOrderForPlayer(group, player);
     group.playerKitchens[player] = {
       tool: el.toolSelect?.value || ["pot", "board"][Math.max(0, group.players.indexOf(player)) % 2],
       score: 0,
       lastFoodDropAt: Date.now(),
       toneQueue: [],
-      orders: nextSingleOrderForPlayer(group, player),
-      ingredients: createStarterIngredients(state.lesson, state.answerScript).slice(0, 6),
+      orders,
+      ingredients: createStarterIngredients(orders, state.answerScript).slice(0, 6),
       pot: [],
       board: [],
       plate: []
@@ -2570,9 +2571,7 @@ function joinGroup() {
   const kitchen = ensurePlayerKitchen(group, player);
   assignToolsForGroup(group);
   if (!kitchen.ingredients.length) {
-    kitchen.ingredients = group.ingredients.length
-      ? group.ingredients.splice(0, 6)
-      : createStarterIngredients(state.lesson, state.answerScript).slice(0, 6);
+    kitchen.ingredients = createStarterIngredients(activeDropSources(kitchen), state.answerScript).slice(0, 6);
   }
   group.log = `${player} 加入 ${group.name}，系統分配${toolName(kitchen.tool)}，每人都有盤子`;
   saveState();
@@ -2584,13 +2583,14 @@ function ensurePlayerKitchen(group, player) {
     return normalizePlayerKitchen({}, state.lesson, state.answerScript);
   }
   if (!group.playerKitchens[player]) {
+    const orders = nextSingleOrderForPlayer(group, player);
     group.playerKitchens[player] = {
       tool: assignToolForPlayer(group, player),
       score: 0,
       lastFoodDropAt: Date.now(),
       toneQueue: [],
-      orders: nextSingleOrderForPlayer(group, player),
-      ingredients: createStarterIngredients(state.lesson, state.answerScript).slice(0, 6),
+      orders,
+      ingredients: createStarterIngredients(orders, state.answerScript).slice(0, 6),
       pot: [],
       board: [],
       plate: []
@@ -2657,7 +2657,7 @@ function startRound() {
   state.groups.forEach((group) => {
     group.score = 0;
     group.log = "回合開始，快點備菜！";
-    group.ingredients = createStarterIngredients(state.lesson, state.answerScript);
+    group.ingredients = [];
     group.players.forEach((player) => {
       if (group.playerKitchens?.[player]) {
         group.playerKitchens[player].orders = [];
@@ -2668,11 +2668,11 @@ function startRound() {
       kitchen.score = 0;
       kitchen.lastFoodDropAt = Date.now();
       kitchen.toneQueue = [];
-      kitchen.ingredients = createStarterIngredients(state.lesson, state.answerScript).slice(0, 6);
+      kitchen.orders = nextSingleOrderForPlayer(group, player);
+      kitchen.ingredients = createStarterIngredients(activeDropSources(kitchen), state.answerScript).slice(0, 6);
       kitchen.pot = [];
       kitchen.board = [];
       kitchen.plate = [];
-      kitchen.orders = nextSingleOrderForPlayer(group, player);
     });
     assignToolsForGroup(group);
     group.pot = [];
