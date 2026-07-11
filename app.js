@@ -243,8 +243,8 @@ function init() {
     render();
   });
 
-  el.lessonInput.value = state.lesson.map((item) => `${item.traditional},${item.simplified},${item.pinyin},${item.tone}`).join("\n");
-  if (el.folderLessonInput) el.folderLessonInput.value = el.lessonInput.value;
+  el.lessonInput.value = "";
+  if (el.folderLessonInput) el.folderLessonInput.value = "";
   setSelectedAnswerScript(state.answerScript);
   el.groupCount.value = state.groups.length;
   if (el.groupNamesInput) el.groupNamesInput.value = groupNamesToText(state.groups);
