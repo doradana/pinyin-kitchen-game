@@ -2917,12 +2917,42 @@ body.login-view-active .tutorial-replay-btn {
   }
 
   .kitchen-orders {
+    top: 8px;
+    left: 8px;
+    width: min(230px, calc(100% - 152px));
+    min-height: 76px;
     padding: 6px 7px;
+    transform: none;
+    z-index: 31;
   }
 
   .kitchen-orders .order {
     flex-basis: 68px;
     min-height: 54px;
+  }
+
+  .kitchen-orders .order .hanzi {
+    font-size: 30px;
+  }
+
+  .kitchen-score-strip {
+    top: 8px;
+    right: 8px;
+    min-width: 132px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 999px;
+  }
+
+  .kitchen-score-strip div {
+    padding: 6px 7px;
+  }
+
+  .kitchen-score-strip span {
+    font-size: 10px;
+  }
+
+  .kitchen-score-strip strong {
+    font-size: 22px;
   }
 
   .pot {
@@ -2973,6 +3003,28 @@ body.login-view-active .tutorial-replay-btn {
     bottom: 16%;
     width: 87px;
     height: 87px;
+  }
+}
+
+@media (max-width: 390px) {
+  .kitchen-orders {
+    width: calc(100% - 138px);
+  }
+
+  .kitchen-score-strip {
+    min-width: 118px;
+  }
+
+  .kitchen-score-strip div {
+    padding-inline: 5px;
+  }
+
+  .kitchen-score-strip strong {
+    font-size: 20px;
+  }
+
+  .kitchen-orders .order .hanzi {
+    font-size: 27px;
   }
 }
 
