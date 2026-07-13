@@ -1023,7 +1023,7 @@ function joinGroup() {
   if (!kitchen.ingredients.length) {
     kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, STARTER_INGREDIENT_COUNT);
   }
-  group.log = `${player} 加入 ${group.name}，使用${toolName(kitchen.tool)}，每人都有盤子`;
+  group.log = `${player} 加入 ${group.name}，使用${toolAccessText(kitchen.tool)}`;
   saveState();
 }
 
@@ -1322,6 +1322,7 @@ function renderStudent() {
   if (!group.players.includes(getPlayerName()) && activeMode !== "student") return;
   renderStudentDoor();
   const kitchen = ensurePlayerKitchen(group, getPlayerName());
+  normalizePlateAccess(kitchen);
   if (ensureStarterIngredientsVisible(group, kitchen) && !starterRefillInProgress) {
     starterRefillInProgress = true;
     saveState();
@@ -1338,7 +1339,7 @@ function renderStudent() {
   renderTileList(el.ingredientTray, kitchen.ingredients);
   renderTileList(el.potItems, kitchen.pot);
   renderTileList(el.boardItems, kitchen.board);
-  renderTileList(el.plateItems, kitchen.plate);
+  renderTileList(el.plateItems, playerHasPlate(kitchen) ? kitchen.plate : []);
 }
 
 function ensureStarterIngredientsVisible(group, kitchen) {
@@ -1406,7 +1407,7 @@ function renderTeamMap(group, player) {
 
 function renderOwnedStation(tool) {
   document.querySelectorAll(".station").forEach((station) => {
-    const owned = station.dataset.target === tool || station.dataset.target === "plate";
+    const owned = station.dataset.target === tool || (station.dataset.target === "plate" && playerHasPlate(tool));
     station.classList.toggle("owned", owned);
     station.classList.toggle("locked", !owned);
     station.classList.toggle("personal-plate", station.dataset.target === "plate");
@@ -1416,9 +1417,39 @@ function renderOwnedStation(tool) {
     requestAnimationFrame(preventStationOverlaps);
   });
   const label = toolName(tool);
+  const plateText = playerHasPlate(tool) ? "你也有盤子" : "你沒有盤子，請把合成好的字傳給拿砧板的隊友";
   el.dropBanner.textContent = state.running
-    ? `你的主要廚具是${label}，你也有盤子；食材左右滑出畫面可傳給組員`
-    : `你的主要廚具是${label}，你也有盤子；老師開始後就能傳食材`;
+    ? `你的主要廚具是${label}，${plateText}；食材左右滑出畫面可傳給組員`
+    : `你的主要廚具是${label}，${plateText}；老師開始後就能傳食材`;
+}
+
+function playerHasPlate(kitchenOrTool) {
+  const tool = typeof kitchenOrTool === "string" ? kitchenOrTool : kitchenOrTool?.tool;
+  return tool === "board";
+}
+
+function toolAccessText(kitchenOrTool) {
+  const tool = typeof kitchenOrTool === "string" ? kitchenOrTool : kitchenOrTool?.tool;
+  return playerHasPlate(tool) ? `${toolName(tool)}和盤子` : `${toolName(tool)}，沒有盤子`;
+}
+
+function normalizePlateAccess(kitchen) {
+  if (!kitchen || playerHasPlate(kitchen) || !Array.isArray(kitchen.plate) || !kitchen.plate.length) return;
+  const occupied = tableObstacleRects(kitchen.ingredients);
+  kitchen.plate.forEach((item) => {
+    const width = item.type === "tone" ? 52 : 64;
+    const position = Number.isFinite(item.x) && Number.isFinite(item.y)
+      ? clampToWorkArea(item.x, item.y, width, 52)
+      : randomDropPosition(width, 52, occupied);
+    item.x = position.x;
+    item.y = position.y;
+    delete item.serving;
+    delete item.entryFrom;
+    delete item.entryAt;
+    kitchen.ingredients.push(item);
+    occupied.push({ x: position.x, y: position.y, width, height: 52 });
+  });
+  kitchen.plate = [];
 }
 
 function renderOrders(group) {
@@ -1470,14 +1501,7 @@ function renderTileList(container, items) {
           item.y = position.y;
         }
       } else if (!position) {
-        const scattered = scatterPosition(item, width, 52);
-        position = nearestOpenPosition(
-          scattered.x,
-          scattered.y,
-          width,
-          52,
-          occupied
-        );
+        position = scatterPosition(item, width, 52);
         item.x = position.x;
         item.y = position.y;
       }
@@ -1583,7 +1607,7 @@ function renderStudentMonitorScreen(group, player) {
       <header>
         <div>
           <strong>${escapeHtml(player)}</strong>
-          <span>${tool}｜盤子</span>
+          <span>${escapeHtml(toolAccessText(kitchen.tool))}</span>
         </div>
         <em>${doneCount}/${totalCount}</em>
       </header>
@@ -1609,11 +1633,14 @@ function renderStudentMonitorScreen(group, player) {
 function monitorStationPiles(kitchen) {
   const ownedTool = kitchen.tool === "board" ? "board" : "pot";
   const toolLabel = ownedTool === "board" ? "砧板" : "鍋子";
-  return [
+  const piles = [
     monitorPile("食材台", kitchen.ingredients),
-    monitorPile(toolLabel, kitchen[ownedTool]),
-    monitorPile("盤子", kitchen.plate)
-  ].join("");
+    monitorPile(toolLabel, kitchen[ownedTool])
+  ];
+  if (playerHasPlate(kitchen)) {
+    piles.push(monitorPile("盤子", kitchen.plate));
+  }
+  return piles.join("");
 }
 
 function monitorPile(label, items = []) {
@@ -1701,7 +1728,7 @@ function renderTimers() {
   if (el.kitchenTimerText) el.kitchenTimerText.textContent = remaining;
   const group = getGroup();
   const kitchen = group ? ensurePlayerKitchen(group, getPlayerName()) : null;
-  const toolText = kitchen ? `你的主要廚具是${toolName(kitchen.tool)}，你也有盤子；` : "";
+  const toolText = kitchen ? `你的主要廚具是${toolAccessText(kitchen.tool)}；` : "";
   if (state.running) {
     el.dropBanner.textContent = `${toolText}左右滑出畫面可傳食材，剩下 ${remaining}`;
   } else {
@@ -1730,6 +1757,8 @@ function attachTilePointerHandlers(tile, itemId) {
   let pointerId = null;
   let tileWidth = 64;
   let tileHeight = 52;
+  let grabOffsetX = 32;
+  let grabOffsetY = 26;
   let pendingPush = null;
   let pushFrame = null;
   let dragSourceName = null;
@@ -1742,6 +1771,8 @@ function attachTilePointerHandlers(tile, itemId) {
     const tileRect = tile.getBoundingClientRect();
     tileWidth = tileRect.width;
     tileHeight = tileRect.height;
+    grabOffsetX = event.clientX - tileRect.left;
+    grabOffsetY = event.clientY - tileRect.top;
     startX = event.clientX;
     startY = event.clientY;
     dragSourceName = getItemSourceName(itemId);
@@ -1781,10 +1812,17 @@ function attachTilePointerHandlers(tile, itemId) {
       tile.style.position = "absolute";
       tile.style.left = `${Math.round(tileRect.left - kitchenRect.left)}px`;
       tile.style.top = `${Math.round(tileRect.top - kitchenRect.top)}px`;
+      const resizedRect = tile.getBoundingClientRect();
+      if (resizedRect.width && resizedRect.height && (resizedRect.width !== tileWidth || resizedRect.height !== tileHeight)) {
+        grabOffsetX *= resizedRect.width / Math.max(1, tileWidth);
+        grabOffsetY *= resizedRect.height / Math.max(1, tileHeight);
+        tileWidth = resizedRect.width;
+        tileHeight = resizedRect.height;
+      }
     }
     const position = clampToWorkArea(
-      event.clientX - kitchenRect.left - tileWidth / 2,
-      event.clientY - kitchenRect.top - tileHeight / 2,
+      event.clientX - kitchenRect.left - grabOffsetX,
+      event.clientY - kitchenRect.top - grabOffsetY,
       tileWidth,
       tileHeight
     );
@@ -1824,7 +1862,7 @@ function attachTilePointerHandlers(tile, itemId) {
     }
     if (moved) {
       tile.dataset.swiped = "true";
-      moveItemToTable(itemId, currentTilePosition(tile), { nearbyOnly: pulledFromCookware });
+      moveItemToTable(itemId, currentTilePosition(tile), { keepExact: true });
       clearPreviewPushes();
     }
   });
@@ -1937,7 +1975,7 @@ function moveItemToTable(itemId, position, options = {}) {
     const nearbyRect = expandedRect({ ...intendedPosition, width, height: 52 }, COLLISION_NEARBY_MARGIN);
     occupied = occupied.filter((rect) => overlapsAny(rect, [nearbyRect]));
   }
-  const finalPosition = nearestOpenPosition(
+  const finalPosition = options.keepExact ? intendedPosition : nearestOpenPosition(
     intendedPosition.x,
     intendedPosition.y,
     width,
@@ -2096,11 +2134,17 @@ function passItemToTeammate(itemId, direction) {
     return;
   }
   const recipientKitchen = ensurePlayerKitchen(group, recipient);
-  delete item.x;
-  delete item.y;
   delete item.serving;
   item.entryFrom = direction < 0 ? "right" : "left";
   item.entryAt = Date.now();
+  const width = item.type === "tone" ? 52 : 64;
+  const kitchenRect = document.querySelector(".kitchen").getBoundingClientRect();
+  const incomingX = direction < 0 ? Math.max(84, kitchenRect.width - 148) : 84;
+  const incomingY = workAreaTopSafe(kitchenRect) + 24;
+  const occupied = tableObstacleRects(recipientKitchen.ingredients);
+  const position = nearestOpenPosition(incomingX, incomingY, width, 52, occupied);
+  item.x = position.x;
+  item.y = position.y;
   recipientKitchen.ingredients.push(item);
   group.log = `${player} 把 ${item.label} ${direction < 0 ? "左滑" : "右滑"}傳給 ${recipient}`;
   selectedId = null;
@@ -2110,8 +2154,8 @@ function passItemToTeammate(itemId, direction) {
 function moveItemToTarget(itemId, target) {
   const group = getGroup();
   const kitchen = ensurePlayerKitchen(group, getPlayerName());
-  if (target !== kitchen.tool && target !== "plate") {
-    group.log = `你目前有${toolName(kitchen.tool)}和盤子，不能使用${toolName(target)}`;
+  if (target !== kitchen.tool && !(target === "plate" && playerHasPlate(kitchen))) {
+    group.log = `你目前有${toolAccessText(kitchen.tool)}，不能使用${toolName(target)}`;
     selectedId = null;
     saveState();
     return;
@@ -2927,7 +2971,7 @@ function joinGroup() {
   if (!kitchen.ingredients.length) {
     kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, STARTER_INGREDIENT_COUNT);
   }
-  group.log = `${player} 加入 ${group.name}，系統分配${toolName(kitchen.tool)}，每人都有盤子`;
+  group.log = `${player} 加入 ${group.name}，系統分配${toolAccessText(kitchen.tool)}`;
   saveState();
 }
 
