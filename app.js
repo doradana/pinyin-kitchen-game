@@ -118,6 +118,7 @@ const DEFAULT_FOOD_DROP_SECONDS = 15;
 const MAX_TABLE_INGREDIENTS = 32;
 const SHARED_ORDER_COUNT = 5;
 const STARTER_INGREDIENT_COUNT = 6;
+const STARTER_LAYOUT_VERSION = "20260714-random-starter";
 const COLLISION_NEARBY_MARGIN = 96;
 const COLLISION_MAX_OBJECTS = 18;
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("pinyin-kitchen") : null;
@@ -752,35 +753,43 @@ function spreadStarterIngredients(items) {
   const kitchenRect = kitchen?.getBoundingClientRect();
   const canPlaceOnTable = kitchenRect?.width > 0 && kitchenRect?.height > 0;
   const occupied = canPlaceOnTable ? stationRects() : [];
-  const anchors = [
-    [0.18, 0.34], [0.34, 0.48], [0.52, 0.34], [0.70, 0.50],
-    [0.84, 0.36], [0.22, 0.70], [0.42, 0.72], [0.62, 0.68],
-    [0.82, 0.68], [0.30, 0.28], [0.74, 0.78], [0.50, 0.56]
-  ];
   return items.map((item, index) => {
     const width = item.type === "tone" ? 52 : 64;
     const height = 52;
-    const [xRatio, yRatio] = anchors[index % anchors.length];
-    let position;
-    if (canPlaceOnTable) {
-      const targetX = kitchenRect.width * xRatio;
-      const targetY = kitchenRect.height * yRatio;
-      position = nearestOpenPosition(targetX, targetY, width, height, occupied);
+    const position = canPlaceOnTable ? randomStarterPosition(width, height, occupied) : null;
+    if (position) {
       occupied.push({ ...position, width, height });
-    } else {
-      position = {
-        x: Math.round(xRatio * 1000),
-        y: Math.round(yRatio * 520)
-      };
     }
     return {
       ...item,
-      x: position.x,
-      y: position.y,
+      ...(position ? { x: position.x, y: position.y } : {}),
       starterLayout: true,
+      starterLayoutVersion: STARTER_LAYOUT_VERSION,
       entryAt: Date.now() + index
     };
   });
+}
+
+function randomStarterPosition(width, height, occupied = []) {
+  const kitchen = document.querySelector(".kitchen");
+  const kitchenRect = kitchen?.getBoundingClientRect();
+  if (!kitchenRect?.width || !kitchenRect?.height) return null;
+  const topSafe = workAreaTopSafe(kitchenRect);
+  const bottomSafe = clamp(Math.round(kitchenRect.height * 0.16), 84, 112);
+  const leftPad = clamp(Math.round(kitchenRect.width * 0.08), 72, 130);
+  const rightPad = clamp(Math.round(kitchenRect.width * 0.08), 72, 130);
+  const usableWidth = Math.max(1, kitchenRect.width - leftPad - rightPad - width);
+  const usableHeight = Math.max(1, kitchenRect.height - topSafe - bottomSafe - height);
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const position = clampToWorkArea(
+      leftPad + Math.random() * usableWidth,
+      topSafe + Math.random() * usableHeight,
+      width,
+      height
+    );
+    if (!overlapsAny({ ...position, width, height }, occupied)) return position;
+  }
+  return firstOpenTilePosition(width, height, occupied);
 }
 
 function splitToneParts(tone) {
@@ -1401,11 +1410,19 @@ function renderTileList(container, items) {
     if (container === el.ingredientTray) {
       const width = item.type === "tone" ? 52 : 64;
       let position;
-      if (Number.isFinite(item.x) && Number.isFinite(item.y)) {
+      if (item.starterLayout && item.starterLayoutVersion !== STARTER_LAYOUT_VERSION && !item.userPlaced) {
+        position = randomStarterPosition(width, 52, occupied);
+        if (position) {
+          item.x = position.x;
+          item.y = position.y;
+          item.starterLayoutVersion = STARTER_LAYOUT_VERSION;
+        }
+      }
+      if (!position && Number.isFinite(item.x) && Number.isFinite(item.y)) {
         position = clampToWorkArea(item.x, item.y, width, 52);
         item.x = position.x;
         item.y = position.y;
-      } else {
+      } else if (!position) {
         const scattered = scatterPosition(item, width, 52);
         position = nearestOpenPosition(
           scattered.x,
@@ -1888,6 +1905,8 @@ function moveItemToTable(itemId, position, options = {}) {
   );
   item.x = finalPosition.x;
   item.y = finalPosition.y;
+  item.userPlaced = true;
+  item.starterLayoutVersion = STARTER_LAYOUT_VERSION;
   delete item.entryFrom;
   delete item.entryAt;
   delete item.serving;
