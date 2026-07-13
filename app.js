@@ -663,11 +663,15 @@ function deleteLessonSet() {
 }
 
 function createStarterIngredients(lesson, answerScript = state.answerScript) {
-  const pinyinItems = lesson.slice(0, 6).flatMap((item) => [
+  const sources = lesson.slice(0, SHARED_ORDER_COUNT);
+  const pinyinItems = sources.flatMap((item) => [
     ...makePinyinPartItems(item, answerScript),
     ...makeToneItems(item, answerScript)
   ]);
-  return shuffle(pinyinItems).slice(0, 10);
+  const helperItems = sources.flatMap((source) => lessonItemPieces(source))
+    .map((item) => makeHelperHanziForSource(item, sources, answerScript))
+    .filter(Boolean);
+  return spreadStarterIngredients(shuffle([...pinyinItems, ...helperItems]).slice(0, 12));
 }
 
 function splitPinyinParts(pinyin) {
@@ -681,6 +685,62 @@ function splitPinyinParts(pinyin) {
 
 function makePinyinPartItems(source, answerScript = state.answerScript) {
   return splitPinyinParts(source.pinyin).map((part) => makeItem("pinyin", part, source, answerScript));
+}
+
+function lessonItemPieces(source) {
+  const traditionalChars = [...String(source.traditional || "")];
+  const simplifiedChars = [...String(source.simplified || source.traditional || "")];
+  const pinyin = String(source.pinyin || "").trim().toLowerCase();
+  const toneParts = splitToneParts(source.tone);
+  const explicitSyllables = pinyin.split(/[\s'·-]+/).filter(Boolean);
+  const syllables = explicitSyllables.length === toneParts.length
+    ? explicitSyllables
+    : inferPinyinSyllables(source, pinyin);
+  if (syllables.length !== toneParts.length || syllables.length !== traditionalChars.length) {
+    return [source];
+  }
+  return syllables.map((syllable, index) => normalizeLessonItem({
+    traditional: traditionalChars[index],
+    simplified: simplifiedChars[index] || traditionalChars[index],
+    pinyin: syllable,
+    tone: toneParts[index]
+  }));
+}
+
+function makeHelperHanziForSource(source, targets = sharedActiveOrders(getGroup()), answerScript = state.answerScript) {
+  const answerSet = new Set((targets.length ? targets : state.lesson).flatMap((item) => [
+    item.traditional,
+    item.simplified,
+    displayHanzi(item, answerScript)
+  ]));
+  const banks = [...helperHanziBank, ...generatedHanziBank];
+  const candidates = banks.filter((item) =>
+    item.pinyin === source.pinyin &&
+    item.tone === source.tone &&
+    !answerSet.has(item.traditional) &&
+    !answerSet.has(item.simplified) &&
+    !answerSet.has(displayHanzi(item, answerScript))
+  );
+  const helper = candidates.length ? randomItem(candidates) : null;
+  return helper ? makeItem("hanzi", displayHanzi(helper, answerScript), helper, answerScript) : null;
+}
+
+function spreadStarterIngredients(items) {
+  const anchors = [
+    [0.12, 0.28], [0.28, 0.42], [0.45, 0.26], [0.62, 0.45],
+    [0.78, 0.32], [0.18, 0.66], [0.38, 0.70], [0.58, 0.68],
+    [0.82, 0.62], [0.30, 0.22], [0.70, 0.76], [0.50, 0.52]
+  ];
+  return items.map((item, index) => {
+    const [xRatio, yRatio] = anchors[index % anchors.length];
+    return {
+      ...item,
+      x: Math.round(xRatio * 1000),
+      y: Math.round(yRatio * 520),
+      starterLayout: true,
+      entryAt: Date.now() + index
+    };
+  });
 }
 
 function splitToneParts(tone) {
@@ -894,7 +954,7 @@ function joinGroup() {
   const kitchen = ensurePlayerKitchen(group, player);
   kitchen.tool = el.toolSelect.value;
   if (!kitchen.ingredients.length) {
-    kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 6);
+    kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 10);
   }
   group.log = `${player} 加入 ${group.name}，使用${toolName(kitchen.tool)}，每人都有盤子`;
   saveState();
@@ -1106,7 +1166,7 @@ function startRound() {
       kitchen.lastFoodDropAt = Date.now();
       kitchen.toneQueue = [];
       kitchen.orders = [];
-      kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 6);
+      kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 10);
       kitchen.pot = [];
       kitchen.board = [];
       kitchen.plate = [];
@@ -2107,7 +2167,11 @@ function trimTableIngredients(kitchen) {
 
 function makeRandomIngredient(kitchen) {
   const source = randomItem(activeDropSources(kitchen));
-  if (Math.random() < 0.75) return makeRandomPinyinPartItem(source);
+  const roll = Math.random();
+  if (roll < 0.6) return makeRandomPinyinPartItem(source);
+  if (roll < 0.85) return makeOrderToneIngredient(source);
+  const helper = makeHelperHanziIngredient(kitchen);
+  if (helper) return helper;
   return makeOrderToneIngredient(source);
 }
 
@@ -2124,8 +2188,8 @@ function makeHelperHanziIngredient(kitchen) {
     item.simplified,
     displayHanzi(item, state.answerScript)
   ]));
-  const targetPairs = new Set(targets.map((item) => `${item.pinyin}:${item.tone}`));
-  const candidates = helperHanziBank.filter((item) =>
+  const targetPairs = new Set(targets.flatMap((item) => lessonItemPieces(item)).map((item) => `${item.pinyin}:${item.tone}`));
+  const candidates = [...helperHanziBank, ...generatedHanziBank].filter((item) =>
     targetPairs.has(`${item.pinyin}:${item.tone}`) &&
     !answerSet.has(item.traditional) &&
     !answerSet.has(item.simplified) &&
@@ -2611,7 +2675,7 @@ function ensurePlayerKitchen(group, player) {
       lastFoodDropAt: Date.now(),
       toneQueue: [],
       orders: [],
-      ingredients: createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 6),
+      ingredients: createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 10),
       pot: [],
       board: [],
       plate: []
@@ -2701,7 +2765,7 @@ function joinGroup() {
   const kitchen = ensurePlayerKitchen(group, player);
   assignToolsForGroup(group);
   if (!kitchen.ingredients.length) {
-    kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 6);
+    kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 10);
   }
   group.log = `${player} 加入 ${group.name}，系統分配${toolName(kitchen.tool)}，每人都有盤子`;
   saveState();
@@ -2720,7 +2784,7 @@ function ensurePlayerKitchen(group, player) {
       lastFoodDropAt: Date.now(),
       toneQueue: [],
       orders: [],
-      ingredients: createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 6),
+      ingredients: createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 10),
       pot: [],
       board: [],
       plate: []
@@ -2801,7 +2865,7 @@ function startRound() {
       kitchen.lastFoodDropAt = Date.now();
       kitchen.toneQueue = [];
       kitchen.orders = [];
-      kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 6);
+      kitchen.ingredients = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, 10);
       kitchen.pot = [];
       kitchen.board = [];
       kitchen.plate = [];
