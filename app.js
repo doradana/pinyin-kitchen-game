@@ -748,17 +748,35 @@ function makeHelperHanziForSource(source, targets = sharedActiveOrders(getGroup(
 }
 
 function spreadStarterIngredients(items) {
+  const kitchen = document.querySelector(".kitchen");
+  const kitchenRect = kitchen?.getBoundingClientRect();
+  const canPlaceOnTable = kitchenRect?.width > 0 && kitchenRect?.height > 0;
+  const occupied = canPlaceOnTable ? stationRects() : [];
   const anchors = [
-    [0.12, 0.28], [0.28, 0.42], [0.45, 0.26], [0.62, 0.45],
-    [0.78, 0.32], [0.18, 0.66], [0.38, 0.70], [0.58, 0.68],
-    [0.82, 0.62], [0.30, 0.22], [0.70, 0.76], [0.50, 0.52]
+    [0.18, 0.34], [0.34, 0.48], [0.52, 0.34], [0.70, 0.50],
+    [0.84, 0.36], [0.22, 0.70], [0.42, 0.72], [0.62, 0.68],
+    [0.82, 0.68], [0.30, 0.28], [0.74, 0.78], [0.50, 0.56]
   ];
   return items.map((item, index) => {
+    const width = item.type === "tone" ? 52 : 64;
+    const height = 52;
     const [xRatio, yRatio] = anchors[index % anchors.length];
+    let position;
+    if (canPlaceOnTable) {
+      const targetX = kitchenRect.width * xRatio;
+      const targetY = kitchenRect.height * yRatio;
+      position = nearestOpenPosition(targetX, targetY, width, height, occupied);
+      occupied.push({ ...position, width, height });
+    } else {
+      position = {
+        x: Math.round(xRatio * 1000),
+        y: Math.round(yRatio * 520)
+      };
+    }
     return {
       ...item,
-      x: Math.round(xRatio * 1000),
-      y: Math.round(yRatio * 520),
+      x: position.x,
+      y: position.y,
       starterLayout: true,
       entryAt: Date.now() + index
     };
