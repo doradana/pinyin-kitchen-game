@@ -234,18 +234,20 @@ function init() {
   if (channel) {
     channel.onmessage = (event) => {
       if (event.data === "state-updated") {
+        if (draggedId) return;
         const nextState = loadState();
         detectGroupJoins(state, nextState);
-        state = nextState;
+        state = preserveLocalPlayerLayout(nextState);
         render();
       }
     };
   }
 
   window.addEventListener("storage", () => {
+    if (draggedId) return;
     const nextState = loadState();
     detectGroupJoins(state, nextState);
-    state = nextState;
+    state = preserveLocalPlayerLayout(nextState);
     render();
   });
 
@@ -313,7 +315,7 @@ async function initRemoteSync() {
       remoteRev = remote.rev;
       const nextState = normalizeState(remote.state);
       detectGroupJoins(state, nextState);
-      state = nextState;
+      state = preserveLocalPlayerLayout(nextState);
       localStorage.setItem(stateKey, JSON.stringify(state));
       render();
       applyingRemote = false;
@@ -346,7 +348,7 @@ async function pullRemoteState() {
     remoteRev = remote.rev;
     const nextState = normalizeState(remote.state);
     detectGroupJoins(state, nextState);
-    state = nextState;
+    state = preserveLocalPlayerLayout(nextState);
     localStorage.setItem(stateKey, JSON.stringify(state));
     render();
     applyingRemote = false;
@@ -370,6 +372,37 @@ async function pushRemoteState() {
   } catch {
     el.syncStatus.textContent = "本機同步未連線";
   }
+}
+
+function preserveLocalPlayerLayout(nextState) {
+  const player = getPlayerName();
+  if (!player || !state?.groups?.length || !nextState?.groups?.length) return nextState;
+  const current = state.groups.find((group) => group.id === currentGroup);
+  const incoming = nextState.groups.find((group) => group.id === currentGroup);
+  const currentKitchen = current?.playerKitchens?.[player];
+  const incomingKitchen = incoming?.playerKitchens?.[player];
+  if (!currentKitchen || !incomingKitchen) return nextState;
+
+  const preserveSources = ["ingredients"];
+  preserveSources.forEach((sourceName) => {
+    const localItems = currentKitchen[sourceName] || [];
+    const localById = new Map(localItems
+      .filter((item) => Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y)))
+      .map((item) => [item.id, item]));
+    incomingKitchen[sourceName] = (incomingKitchen[sourceName] || []).map((item) => {
+      const local = localById.get(item.id);
+      if (!local || local.type !== item.type || local.label !== item.label) return item;
+      return {
+        ...item,
+        x: local.x,
+        y: local.y,
+        entryAt: local.entryAt,
+        entryFrom: local.entryFrom
+      };
+    });
+  });
+
+  return nextState;
 }
 
 function normalizeState(saved) {
