@@ -1438,10 +1438,6 @@ function renderOwnedStation(tool) {
     station.classList.toggle("locked", !owned);
     station.classList.toggle("personal-plate", station.dataset.target === "plate");
   });
-  requestAnimationFrame(() => {
-    preventStationOverlaps();
-    requestAnimationFrame(preventStationOverlaps);
-  });
   const label = toolName(tool);
   const plateText = playerHasPlate(tool) ? "你也有盤子" : "你沒有盤子，請把合成好的字傳給拿砧板的隊友";
   el.dropBanner.textContent = state.running
@@ -1522,10 +1518,6 @@ function renderTileList(container, items) {
       let position;
       if (!position && Number.isFinite(item.x) && Number.isFinite(item.y)) {
         position = clampToWorkArea(item.x, item.y, width, 52);
-        if (position.x !== item.x || position.y !== item.y) {
-          item.x = position.x;
-          item.y = position.y;
-        }
       } else if (!position) {
         position = scatterPosition(item, width, 52);
         item.x = position.x;
