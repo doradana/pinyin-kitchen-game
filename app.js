@@ -116,6 +116,7 @@ const sessionPlayerKey = "pinyinKitchenPlayer";
 const sessionGroupKey = "pinyinKitchenGroup";
 const DEFAULT_FOOD_DROP_SECONDS = 15;
 const MAX_TABLE_INGREDIENTS = 32;
+const SHARED_ORDER_COUNT = 5;
 const COLLISION_NEARBY_MARGIN = 96;
 const COLLISION_MAX_OBJECTS = 18;
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("pinyin-kitchen") : null;
@@ -381,8 +382,14 @@ function normalizeState(saved) {
 }
 
 function normalizeGroup(group, lesson, answerScript) {
-  const sharedOrders = (group.orders?.length ? group.orders : lesson)
+  const normalizedLesson = normalizeLesson(lesson);
+  const rawOrders = (group.orders?.length ? group.orders : normalizedLesson)
     .map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done) }));
+  const sharedOrders = rawOrders.slice(0, SHARED_ORDER_COUNT);
+  const savedCursor = Number(group.orderCursor);
+  const orderCursor = Number.isFinite(savedCursor) && savedCursor > 0
+    ? savedCursor
+    : Math.min(rawOrders.length, SHARED_ORDER_COUNT);
   const normalized = {
     ...group,
     name: group.name || `${group.id || "A"} 組`,
@@ -391,7 +398,8 @@ function normalizeGroup(group, lesson, answerScript) {
     board: (group.board || []).map((item) => normalizeItem(item, lesson, answerScript)),
     plate: (group.plate || []).map((item) => normalizeItem(item, lesson, answerScript)),
     playerKitchens: group.playerKitchens || {},
-    orders: sharedOrders
+    orders: sharedOrders,
+    orderCursor
   };
   Object.keys(normalized.playerKitchens).forEach((player) => {
     normalized.playerKitchens[player] = normalizePlayerKitchen(normalized.playerKitchens[player], lesson, answerScript);
@@ -428,12 +436,50 @@ function normalizeLessonItem(item) {
   };
 }
 
-function createGroupOrders(lesson = state.lesson) {
-  return normalizeLesson(lesson).map((item) => ({ ...item, done: false }));
+function createGroupOrders(lesson = state.lesson, start = 0, count = SHARED_ORDER_COUNT) {
+  return normalizeLesson(lesson)
+    .slice(start, start + count)
+    .map((item) => ({ ...item, done: false }));
+}
+
+function orderKey(item) {
+  return `${item.traditional}|${item.simplified}|${item.pinyin}|${item.tone}`;
+}
+
+function ensureGroupOrders(group) {
+  if (!group) return createGroupOrders(state.lesson);
+  const lesson = normalizeLesson(state.lesson);
+  group.orders = (group.orders || [])
+    .slice(0, SHARED_ORDER_COUNT)
+    .map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done) }));
+  let cursor = Number(group.orderCursor);
+  if (!Number.isFinite(cursor) || cursor < group.orders.length) {
+    cursor = group.orders.length;
+  }
+  const visible = new Set(group.orders.map(orderKey));
+  while (group.orders.length < Math.min(SHARED_ORDER_COUNT, lesson.length) && cursor < lesson.length) {
+    const candidate = { ...lesson[cursor], done: false };
+    cursor += 1;
+    const key = orderKey(candidate);
+    if (visible.has(key) && lesson.length > SHARED_ORDER_COUNT) continue;
+    visible.add(key);
+    group.orders.push(candidate);
+  }
+  group.orderCursor = cursor;
+  return group.orders;
+}
+
+function completeGroupOrder(group, item) {
+  const orders = ensureGroupOrders(group);
+  const index = orders.findIndex((entry) => displayHanzi(entry) === item.hanzi && !entry.done);
+  if (index === -1) return null;
+  const [completed] = orders.splice(index, 1);
+  ensureGroupOrders(group);
+  return completed;
 }
 
 function sharedActiveOrders(group) {
-  const orders = group?.orders?.length ? group.orders : createGroupOrders(state.lesson);
+  const orders = ensureGroupOrders(group);
   const active = orders.filter((order) => !order.done);
   return active.length ? active : orders;
 }
@@ -464,7 +510,8 @@ function buildGroups(count, lesson, roundSeconds, answerScript = state?.answerSc
       pot: [],
       board: [],
       plate: [],
-      orders: [],
+      orders: createGroupOrders(lesson),
+      orderCursor: Math.min(SHARED_ORDER_COUNT, normalizeLesson(lesson).length),
       roundSeconds
     };
   });
@@ -1007,6 +1054,7 @@ function startRound() {
     group.log = "回合開始，快點備菜！";
     group.ingredients = [];
     group.orders = createGroupOrders(state.lesson);
+    group.orderCursor = group.orders.length;
     group.playerKitchens = {};
     group.players.forEach((player, index) => {
       const kitchen = ensurePlayerKitchen(group, player);
@@ -1182,7 +1230,7 @@ function renderOwnedStation(tool) {
 
 function renderOrders(group) {
   el.orderList.innerHTML = "";
-  const orders = group.orders?.length ? group.orders : createGroupOrders(state.lesson);
+  const orders = ensureGroupOrders(group);
   orders.forEach((order) => {
     const card = document.createElement("div");
     card.className = `order ${order.done ? "done" : ""}`;
@@ -1322,8 +1370,9 @@ function renderStudentMonitorScreen(group, player) {
   const kitchen = ensurePlayerKitchen(group, player);
   const leftPlayer = getRecipientPlayer(group, player, -1);
   const rightPlayer = getRecipientPlayer(group, player, 1);
-  const orders = group.orders?.length ? group.orders : createGroupOrders(state.lesson);
-  const doneCount = orders.filter((order) => order.done).length;
+  const orders = ensureGroupOrders(group);
+  const doneCount = Number(group.score || 0);
+  const totalCount = state.lesson?.length || orders.length || 0;
   const tool = toolName(kitchen.tool);
   return `
     <section class="student-screen">
@@ -1332,7 +1381,7 @@ function renderStudentMonitorScreen(group, player) {
           <strong>${escapeHtml(player)}</strong>
           <span>${tool}｜盤子</span>
         </div>
-        <em>${doneCount}/${orders.length || 0}</em>
+        <em>${doneCount}/${totalCount}</em>
       </header>
       <div class="student-screen-neighbors">
         <span>左：${escapeHtml(leftPlayer || "無")}</span>
@@ -1622,9 +1671,18 @@ function currentTilePosition(tile) {
   );
 }
 
+function workAreaTopSafe(kitchenRect) {
+  const base = clamp(Math.round(kitchenRect.height * 0.18), 110, 138);
+  const orderPanel = document.querySelector(".kitchen-orders");
+  if (!orderPanel) return base;
+  const orderRect = orderPanel.getBoundingClientRect();
+  if (!orderRect.width || !orderRect.height) return base;
+  return Math.max(base, Math.round(orderRect.bottom - kitchenRect.top + 10));
+}
+
 function clampToWorkArea(x, y, width = 0, height = 0) {
   const kitchenRect = document.querySelector(".kitchen").getBoundingClientRect();
-  const topSafe = clamp(Math.round(kitchenRect.height * 0.14), 72, 92);
+  const topSafe = workAreaTopSafe(kitchenRect);
   const bottomSafe = clamp(Math.round(kitchenRect.height * 0.16), 84, 112);
   const maxX = Math.max(0, kitchenRect.width - width);
   const maxY = Math.max(topSafe, kitchenRect.height - bottomSafe - height);
@@ -1930,12 +1988,11 @@ function serveIfReady(group, kitchen, item) {
     group.log = "盤子只能上中文字";
     return;
   }
-  const order = (group.orders || []).find((entry) => displayHanzi(entry) === item.hanzi && !entry.done);
+  const order = completeGroupOrder(group, item);
   if (!order) {
     group.log = `${item.hanzi} 不是現在指定的菜`;
     return;
   }
-  order.done = true;
   kitchen.score += 1;
   group.score = groupScore(group);
   item.serving = true;
@@ -2005,11 +2062,13 @@ function makeRandomIngredient(kitchen) {
 }
 
 function activeDropSources(kitchen) {
-  return sharedActiveOrders(groupForKitchen(kitchen));
+  const sources = sharedActiveOrders(groupForKitchen(kitchen));
+  return sources.length ? sources : state.lesson;
 }
 
 function makeHelperHanziIngredient(kitchen) {
   const targets = sharedActiveOrders(groupForKitchen(kitchen));
+  if (!targets.length) return null;
   const answerSet = new Set(state.lesson.flatMap((item) => [
     item.traditional,
     item.simplified,
@@ -2431,7 +2490,7 @@ function scatterPosition(item, width, height) {
 
 function firstOpenTilePosition(width, height, occupied = []) {
   const kitchenRect = document.querySelector(".kitchen").getBoundingClientRect();
-  const topSafe = clamp(Math.round(kitchenRect.height * 0.14), 72, 92);
+  const topSafe = workAreaTopSafe(kitchenRect);
   const bottomSafe = clamp(Math.round(kitchenRect.height * 0.16), 84, 112);
   const stepX = width + 14;
   const stepY = height + 14;
@@ -2495,7 +2554,7 @@ function ensurePlayerKitchen(group, player) {
     group.players.push(player);
   }
   if (!group.playerKitchens[player]) {
-    if (!group.orders?.length) group.orders = createGroupOrders(state.lesson);
+    ensureGroupOrders(group);
     group.playerKitchens[player] = {
       tool: el.toolSelect?.value || ["pot", "board"][Math.max(0, group.players.indexOf(player)) % 2],
       score: 0,
@@ -2604,7 +2663,7 @@ function ensurePlayerKitchen(group, player) {
     return normalizePlayerKitchen({}, state.lesson, state.answerScript);
   }
   if (!group.playerKitchens[player]) {
-    if (!group.orders?.length) group.orders = createGroupOrders(state.lesson);
+    ensureGroupOrders(group);
     group.playerKitchens[player] = {
       tool: assignToolForPlayer(group, player),
       score: 0,
@@ -2679,6 +2738,8 @@ function startRound() {
     group.score = 0;
     group.log = "回合開始，快點備菜！";
     group.ingredients = [];
+    group.orders = createGroupOrders(state.lesson);
+    group.orderCursor = group.orders.length;
     group.players.forEach((player) => {
       if (group.playerKitchens?.[player]) {
         group.playerKitchens[player].orders = [];
@@ -2780,7 +2841,8 @@ function buildGroups(count, lesson, roundSeconds, answerScript = state?.answerSc
       pot: [],
       board: [],
       plate: [],
-      orders: [],
+      orders: createGroupOrders(lesson),
+      orderCursor: Math.min(SHARED_ORDER_COUNT, normalizeLesson(lesson).length),
       roundSeconds
     };
   });
