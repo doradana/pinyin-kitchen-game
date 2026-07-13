@@ -698,6 +698,37 @@ function displayToneSequence(tone) {
   return splitToneParts(tone).map((part) => toneMarks[part] || part).join("");
 }
 
+function inferPinyinSyllables(source, pinyin) {
+  const chars = [...String(source.traditional || source.simplified || "")];
+  let rest = String(pinyin || "").toLowerCase().replace(/[^a-z]/g, "");
+  const syllables = [];
+  for (const char of chars) {
+    const item = findGeneratedHanzi(char);
+    const syllable = item?.pinyin?.toLowerCase().replace(/[^a-z]/g, "");
+    if (!syllable || !rest.startsWith(syllable)) return [];
+    syllables.push(syllable);
+    rest = rest.slice(syllable.length);
+  }
+  return rest ? [] : syllables;
+}
+
+function displayPinyinWithTone(source) {
+  const pinyin = String(source.pinyin || "").trim().toLowerCase();
+  const toneParts = splitToneParts(source.tone);
+  if (!pinyin) return displayToneSequence(source.tone);
+  const explicitSyllables = pinyin.split(/[\s'·-]+/).filter(Boolean);
+  const inferredSyllables = explicitSyllables.length === toneParts.length
+    ? explicitSyllables
+    : inferPinyinSyllables(source, pinyin);
+  const syllables = inferredSyllables.length === toneParts.length
+    ? inferredSyllables
+    : (toneParts.length === 1 ? [pinyin.replace(/\s+/g, "")] : []);
+  if (!syllables.length) return `${pinyin}${displayToneSequence(source.tone)}`;
+  return syllables
+    .map((syllable, index) => `${syllable}${toneMarks[toneParts[index]] || toneParts[index] || ""}`)
+    .join(" ");
+}
+
 function ingredientSignature(parts) {
   return parts.map((part) => String(part || "").toLowerCase()).sort().join("|");
 }
@@ -1006,7 +1037,7 @@ function buildGeneratedLessonTerm(term, missing) {
   return [{
     traditional: pieces.map((item) => item.traditional).join(""),
     simplified: pieces.map((item) => item.simplified).join(""),
-    pinyin: pieces.map((item) => item.pinyin).join(""),
+    pinyin: pieces.map((item) => item.pinyin).join(" "),
     tone: pieces.map((item) => item.tone).join("")
   }];
 }
@@ -1249,7 +1280,7 @@ function renderOrders(group) {
     card.innerHTML = `
       <div>
         <div class="hanzi">${displayHanzi(order)}</div>
-        <div class="order-meta">${order.pinyin}${displayToneSequence(order.tone)}</div>
+        <div class="order-meta">${displayPinyinWithTone(order)}</div>
       </div>
       <strong>${order.done ? "完成" : "待上菜"}</strong>
     `;
@@ -1403,7 +1434,7 @@ function renderStudentMonitorScreen(group, player) {
         ${orders.slice(0, 5).map((order) => `
           <span class="${order.done ? "done" : ""}">
             ${displayHanzi(order)}
-            <small>${order.pinyin}${displayToneSequence(order.tone)}</small>
+            <small>${displayPinyinWithTone(order)}</small>
           </span>
         `).join("") || "<span>無菜單</span>"}
       </div>
@@ -2605,7 +2636,7 @@ function groupScore(group) {
 }
 
 function describeItem(item) {
-  if (item.type === "hanzi") return `${displayHanzi(item)}：${item.pinyin}${displayToneSequence(item.tone)}`;
+  if (item.type === "hanzi") return `${displayHanzi(item)}：${displayPinyinWithTone(item)}`;
   if (item.type === "tone") return `聲調 ${item.tone}`;
   return `拼音字母 ${item.label}`;
 }
