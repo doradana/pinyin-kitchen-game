@@ -776,7 +776,7 @@ function randomStarterPosition(width, height, occupied = []) {
   const kitchenRect = kitchen?.getBoundingClientRect();
   if (!kitchenRect?.width || !kitchenRect?.height) return null;
   const topSafe = workAreaTopSafe(kitchenRect);
-  const bottomSafe = clamp(Math.round(kitchenRect.height * 0.16), 84, 112);
+  const bottomSafe = workAreaBottomSafe(kitchenRect);
   const leftPad = clamp(Math.round(kitchenRect.width * 0.08), 72, 130);
   const rightPad = clamp(Math.round(kitchenRect.width * 0.08), 72, 130);
   const usableWidth = Math.max(1, kitchenRect.width - leftPad - rightPad - width);
@@ -1838,10 +1838,14 @@ function workAreaTopSafe(kitchenRect) {
   return Math.max(base, Math.round(orderRect.bottom - kitchenRect.top + 10));
 }
 
+function workAreaBottomSafe(kitchenRect) {
+  return clamp(Math.round(kitchenRect.height * 0.02), 8, 18);
+}
+
 function clampToWorkArea(x, y, width = 0, height = 0) {
   const kitchenRect = document.querySelector(".kitchen").getBoundingClientRect();
   const topSafe = workAreaTopSafe(kitchenRect);
-  const bottomSafe = clamp(Math.round(kitchenRect.height * 0.16), 84, 112);
+  const bottomSafe = workAreaBottomSafe(kitchenRect);
   const maxX = Math.max(0, kitchenRect.width - width);
   const maxY = Math.max(topSafe, kitchenRect.height - bottomSafe - height);
   return {
@@ -2227,11 +2231,9 @@ function trimTableIngredients(kitchen) {
 function makeRandomIngredient(kitchen) {
   const source = randomItem(activeDropSources(kitchen));
   const roll = Math.random();
-  if (roll < 0.6) return makeRandomPinyinPartItem(source);
-  if (roll < 0.85) return makeOrderToneIngredient(source);
-  const helper = makeHelperHanziIngredient(kitchen);
-  if (helper) return helper;
-  return makeOrderToneIngredient(source);
+  if (roll < 0.45) return makeRandomPinyinPartItem(source);
+  if (roll < 0.70) return makeOrderToneIngredient(source);
+  return makeOrderHanziIngredient(source);
 }
 
 function activeDropSources(kitchen) {
@@ -2257,6 +2259,12 @@ function makeHelperHanziIngredient(kitchen) {
   if (!candidates.length) return null;
   const helper = randomItem(candidates);
   return makeItem("hanzi", displayHanzi(helper, state.answerScript), helper, state.answerScript);
+}
+
+function makeOrderHanziIngredient(source) {
+  const pieces = lessonItemPieces(source);
+  const piece = randomItem(pieces.length ? pieces : [source]);
+  return makeItem("hanzi", displayHanzi(piece, state.answerScript), piece, state.answerScript);
 }
 
 function makeLessonToneIngredient(kitchen) {
@@ -2711,7 +2719,7 @@ function scatterPosition(item, width, height) {
 function firstOpenTilePosition(width, height, occupied = []) {
   const kitchenRect = document.querySelector(".kitchen").getBoundingClientRect();
   const topSafe = workAreaTopSafe(kitchenRect);
-  const bottomSafe = clamp(Math.round(kitchenRect.height * 0.16), 84, 112);
+  const bottomSafe = workAreaBottomSafe(kitchenRect);
   const stepX = width + 14;
   const stepY = height + 14;
   for (let y = topSafe; y <= kitchenRect.height - bottomSafe - height; y += stepY) {
