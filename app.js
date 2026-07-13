@@ -2199,12 +2199,16 @@ function serveIfReady(group, kitchen, item) {
   }
   const order = completeGroupOrder(group, item);
   if (!order) {
+    kitchen.plate = kitchen.plate.filter((plateItem) => plateItem.id !== item.id);
+    delete item.x;
+    delete item.y;
+    kitchen.ingredients.push(item);
     group.log = `${item.hanzi} 不是現在指定的菜`;
     return;
   }
   const partialOrder = group.orders.includes(order);
-  item.serving = true;
-  window.setTimeout(() => removeServedItem(item.id), 520);
+  kitchen.plate = kitchen.plate.filter((plateItem) => plateItem.id !== item.id);
+  delete item.serving;
   if (partialOrder) {
     group.score = groupScore(group);
     group.log = `${getPlayerName()} 完成 ${item.hanzi}，繼續完成同一道菜`;
