@@ -2376,8 +2376,8 @@ body.login-view-active .tutorial-replay-btn {
 
 .round-summary-card p:last-child {
   margin: 0;
-  font-size: clamp(15px, 2vw, 20px);
-  font-weight: 800;
+  font-size: clamp(20px, 3vw, 30px);
+  font-weight: 900;
 }
 
 @keyframes summary-pop {
