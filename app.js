@@ -161,6 +161,9 @@ const el = {
   kitchenScoreText: document.querySelector("#kitchenScoreText"),
   timerText: document.querySelector("#timerText"),
   kitchenTimerText: document.querySelector("#kitchenTimerText"),
+  roundSummary: document.querySelector("#roundSummary"),
+  roundSummaryPersonal: document.querySelector("#roundSummaryPersonal"),
+  roundSummaryTeam: document.querySelector("#roundSummaryTeam"),
   orderList: document.querySelector("#orderList"),
   ingredientTray: document.querySelector("#ingredientTray"),
   potItems: document.querySelector("#potItems"),
@@ -281,6 +284,7 @@ function loadState() {
     roundSeconds: 180,
     foodDropSeconds: DEFAULT_FOOD_DROP_SECONDS,
     startedAt: null,
+    endedAt: null,
     running: false,
     groups: buildGroups(4, normalizeLesson(DEFAULT_LESSON), 180, "traditional")
   };
@@ -381,6 +385,7 @@ function normalizeState(saved) {
     roomPassword: saved.roomPassword || "",
     roundSeconds: saved.roundSeconds || 180,
     foodDropSeconds: clamp(Number(saved.foodDropSeconds) || DEFAULT_FOOD_DROP_SECONDS, 3, 60),
+    endedAt: Number(saved.endedAt || 0) || null,
     groups: (saved.groups?.length ? saved.groups : buildGroups(4, lesson, saved.roundSeconds || 180, answerScript)).map((group) => normalizeGroup(group, lesson, answerScript))
   };
 }
@@ -1219,6 +1224,7 @@ function startRound() {
   state.foodDropSeconds = clamp(Number(el.foodDropSeconds?.value) || state.foodDropSeconds || DEFAULT_FOOD_DROP_SECONDS, 3, 60);
   state.running = true;
   state.startedAt = Date.now();
+  state.endedAt = null;
   state.groups.forEach((group) => {
     group.score = 0;
     group.log = "回合開始，快點備菜！";
@@ -1248,6 +1254,7 @@ function startRound() {
 function resetRound() {
   state.running = false;
   state.startedAt = null;
+  state.endedAt = null;
   state.groups = buildGroups(state.groups.length, state.lesson, state.roundSeconds, state.answerScript, state.groups.map((group) => group.name));
   saveState();
 }
@@ -1266,8 +1273,13 @@ function groupNamesToText(groups) {
 }
 
 function getRemainingSeconds() {
+  if (isRoundEnded()) return 0;
   if (!state.running || !state.startedAt) return state.roundSeconds;
   return Math.max(0, state.roundSeconds - Math.floor((Date.now() - state.startedAt) / 1000));
+}
+
+function isRoundEnded() {
+  return !state.running && Boolean(state.endedAt);
 }
 
 function startTimer() {
@@ -1275,6 +1287,7 @@ function startTimer() {
   timerHandle = window.setInterval(() => {
     if (state.running && getRemainingSeconds() === 0) {
       state.running = false;
+      state.endedAt = Date.now();
       state.groups.forEach((group) => {
         group.log = "時間到！請老師查看成果";
       });
@@ -1340,6 +1353,7 @@ function renderStudent() {
   renderTileList(el.potItems, kitchen.pot);
   renderTileList(el.boardItems, kitchen.board);
   renderTileList(el.plateItems, playerHasPlate(kitchen) ? kitchen.plate : []);
+  renderRoundSummary(group, kitchen);
 }
 
 function ensureStarterIngredientsVisible(group, kitchen) {
@@ -1361,7 +1375,7 @@ function renderStudentDoor() {
     el.studentView.classList.remove("door-opened");
     return;
   }
-  const shouldWait = activeMode === "student" && !state.running;
+  const shouldWait = activeMode === "student" && !state.running && !isRoundEnded();
   el.studentView.classList.toggle("waiting-start", shouldWait);
   if (shouldWait) {
     el.studentView.classList.remove("door-opening");
@@ -1375,6 +1389,18 @@ function renderStudentDoor() {
       el.studentView.classList.remove("door-opening");
     }, 900);
   }
+}
+
+function renderRoundSummary(group, kitchen) {
+  if (!el.roundSummary) return;
+  const ended = isRoundEnded();
+  el.roundSummary.hidden = !ended;
+  el.roundSummary.classList.toggle("show", ended);
+  if (!ended) return;
+  const personalScore = Number(kitchen?.score || 0);
+  const teamScore = Number(group?.score || groupScore(group) || 0);
+  if (el.roundSummaryPersonal) el.roundSummaryPersonal.textContent = personalScore;
+  if (el.roundSummaryTeam) el.roundSummaryTeam.textContent = `全組完成 ${teamScore} 個菜單`;
 }
 
 function renderTeamMap(group, player) {
@@ -1731,6 +1757,8 @@ function renderTimers() {
   const toolText = kitchen ? `你的主要廚具是${toolAccessText(kitchen.tool)}；` : "";
   if (state.running) {
     el.dropBanner.textContent = `${toolText}左右滑出畫面可傳食材，剩下 ${remaining}`;
+  } else if (isRoundEnded()) {
+    el.dropBanner.textContent = `${toolText}本回合結束，請查看分數結算`;
   } else {
     el.dropBanner.textContent = `${toolText}老師開始後就能傳食材`;
   }
@@ -3052,6 +3080,7 @@ function assignToolsForGroup(group) {
 function startRound() {
   state.running = true;
   state.startedAt = Date.now();
+  state.endedAt = null;
   state.groups.forEach((group) => {
     group.score = 0;
     group.log = "回合開始，快點備菜！";
