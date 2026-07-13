@@ -1309,6 +1309,10 @@ function renderStudent() {
   renderTileList(el.potItems, kitchen.pot);
   renderTileList(el.boardItems, kitchen.board);
   renderTileList(el.plateItems, kitchen.plate);
+  requestAnimationFrame(() => {
+    preventKitchenwareFoodOverlaps();
+    requestAnimationFrame(preventKitchenwareFoodOverlaps);
+  });
 }
 
 function renderStudentDoor() {
@@ -2418,6 +2422,12 @@ function preventStationOverlaps() {
   resolveStationOverlaps(null, 0, 0, true);
 }
 
+function preventKitchenwareFoodOverlaps() {
+  stationObjects().forEach((station) => {
+    pushObjectsNaturally(station, 0, 0, true);
+  });
+}
+
 function stationObjects() {
   const kitchenRect = document.querySelector(".kitchen")?.getBoundingClientRect();
   if (!kitchenRect) return [];
@@ -2528,6 +2538,7 @@ function tableObjects(excluded = {}) {
 
 function pushOverlappingObjects(dragged, dx = 0, dy = 0) {
   if (dragged.kind === "station") {
+    pushObjectsNaturally(dragged, dx, dy, false);
     resolveStationOverlaps(dragged.station, dx, dy, false);
     return;
   }
