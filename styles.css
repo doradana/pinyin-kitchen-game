@@ -115,6 +115,11 @@ textarea {
   line-height: 1.6;
 }
 
+.masked-text {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
 .app {
   width: 100%;
   margin: 0 auto;
