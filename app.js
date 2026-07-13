@@ -132,6 +132,7 @@ let stationWasMoved = false;
 let timerHandle = null;
 let remoteRev = 0;
 let applyingRemote = false;
+let lastLocalSaveAt = 0;
 let joinToastHandle = null;
 let activeMode = "login";
 let starterRefillInProgress = false;
@@ -294,6 +295,7 @@ function loadState() {
 }
 
 function saveState(announce = true) {
+  lastLocalSaveAt = Date.now();
   localStorage.setItem(stateKey, JSON.stringify(state));
   if (announce && channel) channel.postMessage("state-updated");
   render();
@@ -341,6 +343,7 @@ async function fetchRemoteState() {
 async function pullRemoteState() {
   if (!remoteSync) return;
   if (draggedId) return;
+  if (Date.now() - lastLocalSaveAt < 3500) return;
   try {
     const remote = await fetchRemoteState();
     if (!remote.state || remote.rev <= remoteRev) return;
@@ -375,30 +378,31 @@ async function pushRemoteState() {
 }
 
 function preserveLocalPlayerLayout(nextState) {
-  const player = getPlayerName();
-  if (!player || !state?.groups?.length || !nextState?.groups?.length) return nextState;
-  const current = state.groups.find((group) => group.id === currentGroup);
-  const incoming = nextState.groups.find((group) => group.id === currentGroup);
-  const currentKitchen = current?.playerKitchens?.[player];
-  const incomingKitchen = incoming?.playerKitchens?.[player];
-  if (!currentKitchen || !incomingKitchen) return nextState;
+  if (!state?.groups?.length || !nextState?.groups?.length) return nextState;
 
-  const preserveSources = ["ingredients"];
-  preserveSources.forEach((sourceName) => {
-    const localItems = currentKitchen[sourceName] || [];
-    const localById = new Map(localItems
-      .filter((item) => Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y)))
-      .map((item) => [item.id, item]));
-    incomingKitchen[sourceName] = (incomingKitchen[sourceName] || []).map((item) => {
-      const local = localById.get(item.id);
-      if (!local || local.type !== item.type || local.label !== item.label) return item;
-      return {
-        ...item,
-        x: local.x,
-        y: local.y,
-        entryAt: local.entryAt,
-        entryFrom: local.entryFrom
-      };
+  state.groups.forEach((currentGroupState) => {
+    const incomingGroup = nextState.groups.find((group) => group.id === currentGroupState.id);
+    if (!incomingGroup?.playerKitchens || !currentGroupState?.playerKitchens) return;
+
+    Object.entries(currentGroupState.playerKitchens).forEach(([player, currentKitchen]) => {
+      const incomingKitchen = incomingGroup.playerKitchens[player];
+      if (!currentKitchen || !incomingKitchen) return;
+
+      const localById = new Map((currentKitchen.ingredients || [])
+        .filter((item) => Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y)))
+        .map((item) => [item.id, item]));
+
+      incomingKitchen.ingredients = (incomingKitchen.ingredients || []).map((item) => {
+        const local = localById.get(item.id);
+        if (!local || local.type !== item.type || local.label !== item.label) return item;
+        return {
+          ...item,
+          x: local.x,
+          y: local.y,
+          entryAt: local.entryAt,
+          entryFrom: local.entryFrom
+        };
+      });
     });
   });
 
