@@ -698,6 +698,18 @@ function displayToneSequence(tone) {
   return splitToneParts(tone).map((part) => toneMarks[part] || part).join("");
 }
 
+function ingredientSignature(parts) {
+  return parts.map((part) => String(part || "").toLowerCase()).sort().join("|");
+}
+
+function pinyinIngredientSignature(source) {
+  return ingredientSignature(splitPinyinParts(source.pinyin));
+}
+
+function toneIngredientSignature(source) {
+  return ingredientSignature(splitToneParts(source.tone));
+}
+
 function makeToneItems(source, answerScript = state.answerScript) {
   return splitToneParts(source.tone).map((tone) =>
     makeItem("tone", toneMarks[tone] || tone, { ...source, tone }, answerScript)
@@ -1954,9 +1966,16 @@ function cookIfReady(group, kitchen) {
     group.log = "鍋子需要拼音字母和聲調";
     return;
   }
+  const pinyinSignature = ingredientSignature(pinyinParts.map((item) => item.label));
+  const toneSignature = ingredientSignature(toneParts.map((item) => item.tone));
+  const activeOrders = sharedActiveOrders(group);
+  const candidates = activeOrders.length ? activeOrders : state.lesson;
+  const match = candidates.find((item) =>
+    pinyinIngredientSignature(item) === pinyinSignature &&
+    toneIngredientSignature(item) === toneSignature
+  );
   const assembledPinyin = pinyinParts.map((item) => item.label).join("").toLowerCase();
   const assembledTone = toneParts.map((item) => item.tone).join("");
-  const match = state.lesson.find((item) => item.pinyin === assembledPinyin && item.tone === assembledTone);
   if (!match) {
     group.log = `${assembledPinyin}${displayToneSequence(assembledTone)} 沒有煮出菜單上的字`;
     return;
