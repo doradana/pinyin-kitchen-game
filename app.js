@@ -335,6 +335,7 @@ async function fetchRemoteState() {
 
 async function pullRemoteState() {
   if (!remoteSync) return;
+  if (draggedId) return;
   try {
     const remote = await fetchRemoteState();
     if (!remote.state || remote.rev <= remoteRev) return;
@@ -1338,7 +1339,6 @@ function renderStudent() {
   renderTileList(el.potItems, kitchen.pot);
   renderTileList(el.boardItems, kitchen.board);
   renderTileList(el.plateItems, kitchen.plate);
-  requestAnimationFrame(preventKitchenwareFoodOverlaps);
 }
 
 function ensureStarterIngredientsVisible(group, kitchen) {
@@ -1465,8 +1465,10 @@ function renderTileList(container, items) {
       let position;
       if (!position && Number.isFinite(item.x) && Number.isFinite(item.y)) {
         position = clampToWorkArea(item.x, item.y, width, 52);
-        item.x = position.x;
-        item.y = position.y;
+        if (position.x !== item.x || position.y !== item.y) {
+          item.x = position.x;
+          item.y = position.y;
+        }
       } else if (!position) {
         const scattered = scatterPosition(item, width, 52);
         position = nearestOpenPosition(
