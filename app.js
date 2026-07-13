@@ -162,7 +162,6 @@ const el = {
   timerText: document.querySelector("#timerText"),
   kitchenTimerText: document.querySelector("#kitchenTimerText"),
   roundSummary: document.querySelector("#roundSummary"),
-  roundSummaryPersonal: document.querySelector("#roundSummaryPersonal"),
   roundSummaryTeam: document.querySelector("#roundSummaryTeam"),
   orderList: document.querySelector("#orderList"),
   ingredientTray: document.querySelector("#ingredientTray"),
@@ -1397,9 +1396,7 @@ function renderRoundSummary(group, kitchen) {
   el.roundSummary.hidden = !ended;
   el.roundSummary.classList.toggle("show", ended);
   if (!ended) return;
-  const personalScore = Number(kitchen?.score || 0);
   const teamScore = Number(group?.score || groupScore(group) || 0);
-  if (el.roundSummaryPersonal) el.roundSummaryPersonal.textContent = personalScore;
   if (el.roundSummaryTeam) el.roundSummaryTeam.textContent = `全組完成 ${teamScore} 個菜單`;
 }
 
