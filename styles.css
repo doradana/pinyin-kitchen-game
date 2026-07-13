@@ -2222,7 +2222,8 @@ body.login-view-active .tutorial-replay-btn {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: rgba(255, 255, 255, 0.08);
+  display: none;
+  background: none;
   pointer-events: none;
 }
 
@@ -2233,7 +2234,8 @@ body.login-view-active .tutorial-replay-btn {
   right: -4%;
   bottom: -42px;
   height: 108px;
-  background: #1c1f2e;
+  display: none;
+  background: none;
   transform: rotate(7deg);
   transform-origin: 60% 0;
   z-index: 1;
@@ -2712,6 +2714,7 @@ body.login-view-active .tutorial-replay-btn {
   position: absolute;
   inset: 0;
   z-index: 2;
+  display: none;
   pointer-events: none;
 }
 
