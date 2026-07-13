@@ -19,8 +19,8 @@
 
   function readJson(key, fallback) {
     try {
-      const value = localStorage.getItem(key);
-      return value ? JSON.parse(value) : fallback;
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
     } catch {
       return fallback;
     }
@@ -52,26 +52,31 @@
 
   function loadLegacyBank() {
     const bank = readJson(legacyLessonBankKey, {});
-    return bank && typeof bank === "object" ? bank : {};
+    return bank && typeof bank === "object" && !Array.isArray(bank) ? bank : {};
   }
 
   function saveLegacyBank(bank) {
     writeJson(legacyLessonBankKey, bank);
   }
 
+  function mergeBank(target, source) {
+    Object.entries(source || {}).forEach(([name, lesson]) => {
+      if (!target[name]) target[name] = lesson;
+    });
+  }
+
   function getAccountBank(account = getTeacherAccount()) {
     const store = loadPermanentStore();
     const legacyBank = loadLegacyBank();
+    store.accounts[account] ||= {};
 
-    if (!store.accounts[account]) store.accounts[account] = {};
-
-    Object.entries(legacyBank).forEach(([name, lesson]) => {
-      if (!store.accounts[account][name]) {
-        store.accounts[account][name] = lesson;
-      }
-    });
+    mergeBank(store.accounts[account], legacyBank);
+    if (account !== defaultAccount) {
+      mergeBank(store.accounts[account], store.accounts[defaultAccount]);
+    }
 
     savePermanentStore(store);
+    saveLegacyBank(store.accounts[account]);
     return store.accounts[account];
   }
 
@@ -113,14 +118,12 @@
   function renderSets(selectedName = "") {
     const bank = getAccountBank();
     setSelect.innerHTML = "";
-
     Object.keys(bank).sort().forEach((name) => {
       const option = document.createElement("option");
       option.value = name;
       option.textContent = name;
       setSelect.append(option);
     });
-
     if (selectedName && bank[selectedName]) setSelect.value = selectedName;
   }
 
@@ -141,65 +144,62 @@
 
   saveButton?.addEventListener("click", (event) => {
     stopOldHandlers(event);
-
     const bank = getAccountBank();
     const name = nameInput.value.trim() || nextFolderName(bank);
-    const sourceText = folderInput.value.trim() || lessonInput.value.trim();
-    const lesson = parseLesson(sourceText);
-
-    if (!name) {
-      status.textContent = "請先輸入資料夾名稱。";
-      return;
-    }
+    const lesson = parseLesson(folderInput.value.trim() || lessonInput.value.trim());
 
     if (!lesson.length) {
-      status.textContent = "請輸入單字資料，格式為：繁體,簡體,pinyin,聲調。";
+      status.textContent = "請先輸入單字內容，格式例如：媽,ma,1";
       return;
     }
 
     bank[name] = lesson;
     saveAccountBank(bank);
-
     const text = lessonToText(lesson);
     nameInput.value = name;
     folderInput.value = text;
     lessonInput.value = text;
     renderSets(name);
-    status.textContent = `已永久儲存「${name}」，重新登入也會保留。`;
+    status.textContent = `已儲存「${name}」`;
   }, true);
 
   loadButton?.addEventListener("click", (event) => {
     stopOldHandlers(event);
-
     const name = setSelect.value;
     const lesson = getAccountBank()[name];
-    if (!lesson) return;
-
+    if (!lesson) {
+      status.textContent = "找不到這個資料夾";
+      renderSets();
+      return;
+    }
     const text = lessonToText(lesson);
     nameInput.value = name;
     folderInput.value = text;
     lessonInput.value = text;
-    status.textContent = `已載入「${name}」。`;
+    status.textContent = `已載入「${name}」`;
   }, true);
 
   deleteButton?.addEventListener("click", (event) => {
     stopOldHandlers(event);
-
     const name = setSelect.value;
     if (!name) return;
-
     const bank = getAccountBank();
     delete bank[name];
     saveAccountBank(bank);
     folderInput.value = "";
     renderSets();
-    status.textContent = `已刪除「${name}」。`;
+    status.textContent = `已刪除「${name}」`;
   }, true);
 
   teacherLoginButton?.addEventListener("click", () => {
     window.setTimeout(() => renderSets(), 0);
   });
 
+  teacherAccountInput?.addEventListener("input", () => renderSets());
   teacherAccountInput?.addEventListener("change", () => renderSets());
+  window.addEventListener("storage", (event) => {
+    if ([legacyLessonBankKey, permanentLessonBankKey, stateKey].includes(event.key)) renderSets(setSelect.value);
+  });
+
   renderSets();
 })();
