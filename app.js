@@ -1547,7 +1547,7 @@ function renderTileList(container, items) {
       const width = item.type === "tone" ? 52 : 64;
       let position;
       if (!position && Number.isFinite(item.x) && Number.isFinite(item.y)) {
-        position = clampToWorkArea(item.x, item.y, width, 52);
+        position = { x: Math.round(Number(item.x)), y: Math.round(Number(item.y)) };
       } else if (!position) {
         position = scatterPosition(item, width, 52);
         item.x = position.x;
@@ -2779,15 +2779,13 @@ function pushedPosition(dragged, object, dx = 0, dy = 0, maxStep = Infinity, lea
 
 function moveTableObject(object, position, persist = false) {
   if (object.kind === "food") {
-    if (persist) {
-      object.item.x = position.x;
-      object.item.y = position.y;
-    }
+    if (!persist) return;
+    object.item.x = position.x;
+    object.item.y = position.y;
     const tile = el.ingredientTray.querySelector(`[data-id="${CSS.escape(object.item.id)}"]`);
     if (tile && !tile.classList.contains("dragging")) {
       tile.style.left = `${position.x}px`;
       tile.style.top = `${position.y}px`;
-      tile.dataset.previewPushed = "true";
     }
   }
   if (object.kind === "station") {
@@ -2834,9 +2832,9 @@ function centerPoint(rect) {
 }
 
 function clearPreviewPushes() {
-  if (el.ingredientTray.querySelector("[data-preview-pushed='true']")) {
-    renderStudent();
-  }
+  el.ingredientTray.querySelectorAll("[data-preview-pushed='true']").forEach((tile) => {
+    delete tile.dataset.previewPushed;
+  });
 }
 
 function sameTableObject(a, b) {
