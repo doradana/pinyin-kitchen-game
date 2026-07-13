@@ -134,6 +134,7 @@ let remoteRev = 0;
 let applyingRemote = false;
 let joinToastHandle = null;
 let activeMode = "login";
+let starterRefillInProgress = false;
 const animatedIncomingIds = new Set();
 
 setSessionRole(sessionStorage.getItem("pinyinKitchenRole") || "");
@@ -1298,6 +1299,12 @@ function renderStudent() {
   if (!group.players.includes(getPlayerName()) && activeMode !== "student") return;
   renderStudentDoor();
   const kitchen = ensurePlayerKitchen(group, getPlayerName());
+  if (ensureStarterIngredientsVisible(group, kitchen) && !starterRefillInProgress) {
+    starterRefillInProgress = true;
+    saveState();
+    starterRefillInProgress = false;
+    return;
+  }
   el.assignedToolText.textContent = toolName(kitchen.tool);
   el.scoreText.textContent = group.score;
   if (el.kitchenScoreText) el.kitchenScoreText.textContent = group.score;
@@ -1313,6 +1320,17 @@ function renderStudent() {
     preventKitchenwareFoodOverlaps();
     requestAnimationFrame(preventKitchenwareFoodOverlaps);
   });
+}
+
+function ensureStarterIngredientsVisible(group, kitchen) {
+  if (!state.running || !group || !kitchen) return false;
+  if (kitchen.ingredients?.length) return false;
+  if (kitchen.pot?.length || kitchen.board?.length || kitchen.plate?.length) return false;
+  const starters = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, STARTER_INGREDIENT_COUNT);
+  if (!starters.length) return false;
+  kitchen.ingredients = starters;
+  kitchen.lastFoodDropAt = Date.now();
+  return true;
 }
 
 function renderStudentDoor() {
@@ -2423,9 +2441,52 @@ function preventStationOverlaps() {
 }
 
 function preventKitchenwareFoodOverlaps() {
-  stationObjects().forEach((station) => {
-    pushObjectsNaturally(station, 0, 0, true);
-  });
+  const group = getGroup();
+  if (!group) return;
+  const kitchen = ensurePlayerKitchen(group, getPlayerName());
+  for (let pass = 0; pass < 8; pass += 1) {
+    let changed = false;
+    stationObjects().forEach((station) => {
+      const occupied = [
+        ...ingredientRects(kitchen.ingredients),
+        ...stationRects(station.station)
+      ];
+      const currentCollision = stationCollisionAt(
+        station.station,
+        { x: station.x, y: station.y },
+        station.width,
+        station.height
+      );
+      if (!overlapsAny(currentCollision, occupied)) return;
+      const position = nearestOpenStationPosition(station, occupied);
+      if (station.x === position.x && station.y === position.y) return;
+      moveTableObject(station, position, true);
+      changed = true;
+    });
+    preventStationOverlaps();
+    if (!changed) return;
+  }
+}
+
+function nearestOpenStationPosition(station, occupied = []) {
+  const start = clampToWorkArea(station.x, station.y, station.width, station.height);
+  const candidates = [start];
+  const step = 28;
+  for (let radius = step; radius <= 420; radius += step) {
+    for (let angle = 0; angle < 360; angle += 30) {
+      const radians = angle * Math.PI / 180;
+      candidates.push(clampToWorkArea(
+        start.x + Math.cos(radians) * radius,
+        start.y + Math.sin(radians) * radius,
+        station.width,
+        station.height
+      ));
+    }
+  }
+  return candidates.find((position) => !overlapsAny(
+    stationCollisionAt(station.station, position, station.width, station.height),
+    occupied
+  )) || start;
 }
 
 function stationObjects() {
