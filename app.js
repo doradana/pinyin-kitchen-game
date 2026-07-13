@@ -1385,9 +1385,6 @@ function renderTileList(container, items) {
       let position;
       if (Number.isFinite(item.x) && Number.isFinite(item.y)) {
         position = clampToWorkArea(item.x, item.y, width, 52);
-        if (overlapsAny({ ...position, width, height: 52 }, occupied)) {
-          position = nearestOpenPosition(position.x, position.y, width, 52, occupied);
-        }
         item.x = position.x;
         item.y = position.y;
       } else {
