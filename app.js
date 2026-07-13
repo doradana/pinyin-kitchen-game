@@ -1316,10 +1316,7 @@ function renderStudent() {
   renderTileList(el.potItems, kitchen.pot);
   renderTileList(el.boardItems, kitchen.board);
   renderTileList(el.plateItems, kitchen.plate);
-  requestAnimationFrame(() => {
-    preventKitchenwareFoodOverlaps();
-    requestAnimationFrame(preventKitchenwareFoodOverlaps);
-  });
+  requestAnimationFrame(preventKitchenwareFoodOverlaps);
 }
 
 function ensureStarterIngredientsVisible(group, kitchen) {
@@ -1329,7 +1326,7 @@ function ensureStarterIngredientsVisible(group, kitchen) {
   const starters = createStarterIngredients(sharedActiveOrders(group), state.answerScript).slice(0, STARTER_INGREDIENT_COUNT);
   if (!starters.length) return false;
   kitchen.ingredients = starters;
-  kitchen.lastFoodDropAt = Date.now();
+  kitchen.lastFoodDropAt ||= state.startedAt || Date.now();
   return true;
 }
 
@@ -1432,14 +1429,6 @@ function renderTileList(container, items) {
     if (container === el.ingredientTray) {
       const width = item.type === "tone" ? 52 : 64;
       let position;
-      if (item.starterLayout && item.starterLayoutVersion !== STARTER_LAYOUT_VERSION && !item.userPlaced) {
-        position = randomStarterPosition(width, 52, occupied);
-        if (position) {
-          item.x = position.x;
-          item.y = position.y;
-          item.starterLayoutVersion = STARTER_LAYOUT_VERSION;
-        }
-      }
       if (!position && Number.isFinite(item.x) && Number.isFinite(item.y)) {
         position = clampToWorkArea(item.x, item.y, width, 52);
         item.x = position.x;
