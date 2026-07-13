@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>拼音廚房</title>
-  <link rel="stylesheet" href="styles.css?v=20260714-station-food-clear">
+  <link rel="stylesheet" href="styles.css?v=20260714-no-password-popup">
 </head>
 <body>
   <div class="app">
@@ -32,11 +32,11 @@
             </div>
             <div class="field-row">
               <label for="teacherPassword">密碼</label>
-              <input id="teacherPassword" type="password" autocomplete="current-password" placeholder="輸入老師密碼">
+              <input id="teacherPassword" class="masked-text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="輸入老師密碼">
             </div>
             <div class="field-row">
               <label for="roomPassword">建立房間密碼</label>
-              <input id="roomPassword" type="password" placeholder="學生加入時要輸入">
+              <input id="roomPassword" class="masked-text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="學生加入時要輸入">
             </div>
             <button id="teacherLogin" class="primary-btn" type="button">進入老師頁面</button>
           </article>
@@ -54,7 +54,7 @@
             </div>
             <div class="field-row">
               <label for="studentRoomPassword">房間密碼</label>
-              <input id="studentRoomPassword" type="password" placeholder="輸入老師設定的密碼">
+              <input id="studentRoomPassword" class="masked-text" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="輸入老師設定的密碼">
             </div>
             <button id="studentLogin" class="primary-btn" type="button">加入遊戲</button>
           </article>
@@ -318,7 +318,7 @@
     <button class="tile" type="button" draggable="false"></button>
   </template>
   <script src="hanzi-pinyin-dict.js?v=20260705-unihan"></script>
-  <script src="app.js?v=20260714-station-food-clear"></script>
+  <script src="app.js?v=20260714-no-password-popup"></script>
   <script src="lesson-folder-persistence.js?v=20260705-single-script-folders"></script>
   <script src="lesson-folder-fix.js?v=20260705-single-script-folders"></script>
   <script src="login-password-recovery.js"></script>
