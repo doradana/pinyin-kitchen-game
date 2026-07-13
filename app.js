@@ -385,7 +385,7 @@ function normalizeState(saved) {
 function normalizeGroup(group, lesson, answerScript) {
   const normalizedLesson = normalizeLesson(lesson);
   const rawOrders = (group.orders?.length ? group.orders : normalizedLesson)
-    .map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done) }));
+    .map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done), servedParts: Array.isArray(item.servedParts) ? item.servedParts : [] }));
   const sharedOrders = rawOrders.slice(0, SHARED_ORDER_COUNT);
   const savedCursor = Number(group.orderCursor);
   const orderCursor = Number.isFinite(savedCursor) && savedCursor > 0
@@ -452,7 +452,7 @@ function ensureGroupOrders(group) {
   const lesson = normalizeLesson(state.lesson);
   group.orders = (group.orders || [])
     .slice(0, SHARED_ORDER_COUNT)
-    .map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done) }));
+    .map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done), servedParts: Array.isArray(item.servedParts) ? item.servedParts : [] }));
   let cursor = Number(group.orderCursor);
   if (!Number.isFinite(cursor) || cursor < group.orders.length) {
     cursor = group.orders.length;
@@ -472,8 +472,28 @@ function ensureGroupOrders(group) {
 
 function completeGroupOrder(group, item) {
   const orders = ensureGroupOrders(group);
-  const index = orders.findIndex((entry) => displayHanzi(entry) === item.hanzi && !entry.done);
+  let matchedPart = null;
+  const index = orders.findIndex((entry) => {
+    if (entry.done) return false;
+    if (displayHanzi(entry) === item.hanzi) {
+      matchedPart = { key: "whole", entry };
+      return true;
+    }
+    const pieces = lessonItemPieces(entry);
+    const served = new Set(entry.servedParts || []);
+    const partIndex = pieces.findIndex((piece, pieceIndex) =>
+      displayHanzi(piece) === item.hanzi && !served.has(String(pieceIndex))
+    );
+    if (partIndex === -1) return false;
+    matchedPart = { key: String(partIndex), entry, pieces };
+    return true;
+  });
   if (index === -1) return null;
+  const order = orders[index];
+  if (matchedPart?.key !== "whole") {
+    order.servedParts = [...new Set([...(order.servedParts || []), matchedPart.key])];
+    if (order.servedParts.length < matchedPart.pieces.length) return order;
+  }
   const [completed] = orders.splice(index, 1);
   ensureGroupOrders(group);
   return completed;
@@ -2062,7 +2082,8 @@ function cookIfReady(group, kitchen) {
   const pinyinSignature = ingredientSignature(pinyinParts.map((item) => item.label));
   const toneSignature = ingredientSignature(toneParts.map((item) => item.tone));
   const activeOrders = sharedActiveOrders(group);
-  const candidates = activeOrders.length ? activeOrders : state.lesson;
+  const candidates = (activeOrders.length ? activeOrders : state.lesson)
+    .flatMap((item) => lessonItemPieces(item));
   const match = candidates.find((item) =>
     pinyinIngredientSignature(item) === pinyinSignature &&
     toneIngredientSignature(item) === toneSignature
