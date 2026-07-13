@@ -1756,16 +1756,6 @@ function attachTilePointerHandlers(tile, itemId) {
     tile.style.left = `${Math.round(position.x)}px`;
     tile.style.top = `${Math.round(position.y)}px`;
     tile.style.zIndex = "29";
-    if (!pulledFromCookware) {
-      schedulePreviewPush({
-        kind: "food",
-        id: itemId,
-        x: position.x,
-        y: position.y,
-        width: tileWidth,
-        height: tileHeight
-      }, dx, dy);
-    }
     setTransferGuideState(transferDirectionFromTile(tile));
   }
   tile.addEventListener("pointerup", (event) => {
@@ -1922,15 +1912,6 @@ function moveItemToTable(itemId, position, options = {}) {
   delete item.entryAt;
   delete item.serving;
   kitchen.ingredients.push(item);
-  settleObjectsAround({
-    kind: "food",
-    item,
-    id: item.id,
-    x: finalPosition.x,
-    y: finalPosition.y,
-    width,
-    height: 52
-  }, true);
   group.log = `${item.label} 放在食材台`;
   selectedId = null;
   saveState();
@@ -2038,14 +2019,24 @@ function settleStationPosition(station) {
   station.style.top = `${currentPosition.y}px`;
   station.style.right = "auto";
   station.style.bottom = "auto";
-  settleObjectsAround({
+  const stationObject = {
     kind: "station",
     station,
     x: currentPosition.x,
     y: currentPosition.y,
     width: stationRect.width,
     height: stationRect.height
-  }, true);
+  };
+  const group = getGroup();
+  const kitchen = group ? ensurePlayerKitchen(group, getPlayerName()) : null;
+  if (kitchen) {
+    const occupied = [
+      ...ingredientRects(kitchen.ingredients),
+      ...stationRects(station)
+    ];
+    const position = nearestOpenStationPosition(stationObject, occupied);
+    moveTableObject(stationObject, position, true);
+  }
   resolveStationOverlaps(station, 0, 0, true);
 }
 
@@ -2588,11 +2579,8 @@ function tableObjects(excluded = {}) {
 
 function pushOverlappingObjects(dragged, dx = 0, dy = 0) {
   if (dragged.kind === "station") {
-    pushObjectsNaturally(dragged, dx, dy, false);
     resolveStationOverlaps(dragged.station, dx, dy, false);
-    return;
   }
-  pushObjectsNaturally(dragged, dx, dy, false);
 }
 
 function settleObjectsAround(anchor, persist = false) {
