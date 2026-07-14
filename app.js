@@ -119,6 +119,7 @@ const MAX_TABLE_INGREDIENTS = 32;
 const SHARED_ORDER_COUNT = 5;
 const STARTER_INGREDIENT_COUNT = 6;
 const STARTER_LAYOUT_VERSION = "20260714-random-starter";
+const DROP_QUEUE_VERSION = "20260714-tone-balance";
 const COLLISION_NEARBY_MARGIN = 96;
 const COLLISION_MAX_OBJECTS = 18;
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("pinyin-kitchen") : null;
@@ -2455,9 +2456,9 @@ function nextDropDescriptor(kitchen) {
 }
 
 function activeDropSignature(kitchen) {
-  return sharedActiveOrders(groupForKitchen(kitchen))
+  return `${DROP_QUEUE_VERSION}|${sharedActiveOrders(groupForKitchen(kitchen))
     .map((order) => `${orderKey(order)}:${(order.servedParts || []).join(".")}`)
-    .join("|");
+    .join("|")}`;
 }
 
 function buildDropQueue(kitchen) {
