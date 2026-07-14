@@ -1442,6 +1442,7 @@ function lockIngredientPositions(kitchen) {
     const height = 52;
     if (Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y))) {
       const position = clampToWorkArea(Number(item.x), Number(item.y), width, height);
+      if (item.x !== position.x || item.y !== position.y) changed = true;
       item.x = position.x;
       item.y = position.y;
       occupied.push({ ...position, width, height });
@@ -1623,7 +1624,7 @@ function renderTileList(container, items) {
       tile.classList.add("serving");
     }
     const incomingKey = `${item.id}:${item.entryAt || ""}`;
-    if (item.entryFrom && !animatedIncomingIds.has(incomingKey)) {
+    if (item.entryFrom && item.entryFrom !== "top" && !animatedIncomingIds.has(incomingKey)) {
       tile.classList.add(`incoming-${item.entryFrom}`);
       animatedIncomingIds.add(incomingKey);
     }
@@ -2412,7 +2413,6 @@ function addFallingIngredients(kitchen, count) {
     const position = randomDropPosition(width, 52, occupied);
     item.x = position.x;
     item.y = position.y;
-    item.entryFrom = "top";
     item.entryAt = Date.now() + index;
     kitchen.ingredients.push(item);
     occupied.push({ x: position.x, y: position.y, width, height: 52 });
