@@ -2219,10 +2219,7 @@ function settleStationPosition(station) {
   const group = getGroup();
   const kitchen = group ? ensurePlayerKitchen(group, getPlayerName()) : null;
   if (kitchen) {
-    const occupied = [
-      ...ingredientRects(kitchen.ingredients),
-      ...stationRects(station)
-    ];
+    const occupied = stationRects(station);
     const position = nearestOpenStationPosition(stationObject, occupied);
     moveTableObject(stationObject, position, true);
   }
@@ -2669,31 +2666,7 @@ function preventStationOverlaps() {
 }
 
 function preventKitchenwareFoodOverlaps() {
-  const group = getGroup();
-  if (!group) return;
-  const kitchen = ensurePlayerKitchen(group, getPlayerName());
-  for (let pass = 0; pass < 8; pass += 1) {
-    let changed = false;
-    stationObjects().forEach((station) => {
-      const occupied = [
-        ...ingredientRects(kitchen.ingredients),
-        ...stationRects(station.station)
-      ];
-      const currentCollision = stationCollisionAt(
-        station.station,
-        { x: station.x, y: station.y },
-        station.width,
-        station.height
-      );
-      if (!overlapsAny(currentCollision, occupied)) return;
-      const position = nearestOpenStationPosition(station, occupied);
-      if (station.x === position.x && station.y === position.y) return;
-      moveTableObject(station, position, true);
-      changed = true;
-    });
-    preventStationOverlaps();
-    if (!changed) return;
-  }
+  preventStationOverlaps();
 }
 
 function nearestOpenStationPosition(station, occupied = []) {
