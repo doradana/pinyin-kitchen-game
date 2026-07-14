@@ -3019,7 +3019,8 @@ body.login-view-active .tutorial-replay-btn {
   .kitchen-orders {
     top: 8px;
     left: 8px;
-    width: min(230px, calc(100% - 152px));
+    right: 8px;
+    width: auto;
     min-height: 76px;
     max-height: 92px;
     padding: 6px 7px;
@@ -3030,8 +3031,9 @@ body.login-view-active .tutorial-replay-btn {
   }
 
   .kitchen-orders .order-list {
-    grid-template-columns: repeat(5, 74px);
+    grid-template-columns: repeat(5, minmax(104px, 1fr));
     width: max-content;
+    min-width: 100%;
   }
 
   .kitchen-orders .order {
@@ -3044,7 +3046,7 @@ body.login-view-active .tutorial-replay-btn {
   }
 
   .kitchen-score-strip {
-    top: 8px;
+    top: 106px;
     right: 8px;
     min-width: 132px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3116,7 +3118,8 @@ body.login-view-active .tutorial-replay-btn {
 
 @media (max-width: 390px) {
   .kitchen-orders {
-    width: calc(100% - 138px);
+    right: 8px;
+    width: auto;
   }
 
   .kitchen-score-strip {
@@ -3484,6 +3487,46 @@ body.login-view-active .tutorial-replay-btn {
     height: max(230px, calc(100vh - 118px));
     min-height: 0;
     aspect-ratio: auto;
+  }
+
+  .kitchen-orders {
+    top: 6px;
+    left: 6px;
+    right: 6px;
+    width: auto;
+    min-height: 64px;
+    max-height: 78px;
+    padding: 5px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .kitchen-orders .order-list {
+    grid-template-columns: repeat(5, minmax(112px, 1fr));
+    gap: 5px;
+    width: max-content;
+    min-width: 100%;
+    margin-top: 4px;
+  }
+
+  .kitchen-orders .order {
+    min-height: 48px;
+    padding: 4px 5px;
+  }
+
+  .kitchen-orders .order .hanzi {
+    font-size: 24px;
+  }
+
+  .kitchen-orders .order-meta,
+  .kitchen-orders .order strong {
+    font-size: 9px;
+  }
+
+  .kitchen-score-strip {
+    top: 88px;
+    right: 8px;
+    min-width: 116px;
   }
 }
 
