@@ -2462,20 +2462,55 @@ function activeDropSignature(kitchen) {
 
 function buildDropQueue(kitchen) {
   const group = groupForKitchen(kitchen);
-  const queue = [];
+  const pinyinQueue = [];
+  const toneQueue = [];
   sharedActiveOrders(group).forEach((order) => {
     const served = new Set(order.servedParts || []);
     lessonItemPieces(order).forEach((piece, index) => {
       if (served.has(String(index))) return;
       splitPinyinParts(piece.pinyin).forEach((label) => {
-        queue.push({ type: "pinyin", label, source: piece });
+        pinyinQueue.push({ type: "pinyin", label, source: piece });
       });
       splitToneParts(piece.tone).forEach((tone) => {
-        queue.push({ type: "tone", tone, source: { ...piece, tone } });
+        toneQueue.push({ type: "tone", tone, source: { ...piece, tone } });
       });
     });
   });
-  return shuffle(queue);
+  return interleaveDropDescriptors(shuffle(pinyinQueue), balanceToneDescriptors(toneQueue));
+}
+
+function balanceToneDescriptors(toneQueue) {
+  const byTone = new Map();
+  shuffle(toneQueue).forEach((descriptor) => {
+    const key = descriptor.tone || "";
+    if (!byTone.has(key)) byTone.set(key, []);
+    byTone.get(key).push(descriptor);
+  });
+  const balanced = [];
+  while ([...byTone.values()].some((items) => items.length)) {
+    shuffle([...byTone.keys()]).forEach((tone) => {
+      const items = byTone.get(tone);
+      if (items?.length) balanced.push(items.shift());
+    });
+  }
+  return balanced;
+}
+
+function interleaveDropDescriptors(pinyinQueue, toneQueue) {
+  const queue = [];
+  let pinyinIndex = 0;
+  let toneIndex = 0;
+  while (pinyinIndex < pinyinQueue.length || toneIndex < toneQueue.length) {
+    for (let count = 0; count < 2 && pinyinIndex < pinyinQueue.length; count += 1) {
+      queue.push(pinyinQueue[pinyinIndex]);
+      pinyinIndex += 1;
+    }
+    if (toneIndex < toneQueue.length) {
+      queue.push(toneQueue[toneIndex]);
+      toneIndex += 1;
+    }
+  }
+  return queue;
 }
 
 function makeHelperHanziIngredient(kitchen) {
