@@ -383,6 +383,8 @@ function preserveLocalPlayerLayout(nextState) {
   state.groups.forEach((currentGroupState) => {
     const incomingGroup = nextState.groups.find((group) => group.id === currentGroupState.id);
     if (!incomingGroup?.playerKitchens || !currentGroupState?.playerKitchens) return;
+    incomingGroup.score = Math.max(Number(incomingGroup.score || 0), Number(currentGroupState.score || 0));
+    mergeOrderProgress(currentGroupState, incomingGroup);
 
     Object.entries(currentGroupState.playerKitchens).forEach(([player, currentKitchen]) => {
       const incomingKitchen = incomingGroup.playerKitchens[player];
@@ -407,6 +409,25 @@ function preserveLocalPlayerLayout(nextState) {
   });
 
   return nextState;
+}
+
+function mergeOrderProgress(currentGroupState, incomingGroup) {
+  const currentByKey = new Map((currentGroupState.orders || []).map((order) => [orderKey(order), order]));
+  incomingGroup.orders = (incomingGroup.orders || []).map((incomingOrder) => {
+    const currentOrder = currentByKey.get(orderKey(incomingOrder));
+    if (!currentOrder) return incomingOrder;
+    const servedParts = [
+      ...new Set([
+        ...(Array.isArray(incomingOrder.servedParts) ? incomingOrder.servedParts : []),
+        ...(Array.isArray(currentOrder.servedParts) ? currentOrder.servedParts : [])
+      ])
+    ];
+    return {
+      ...incomingOrder,
+      servedParts,
+      done: Boolean(incomingOrder.done || currentOrder.done)
+    };
+  });
 }
 
 function normalizeState(saved) {
@@ -458,6 +479,8 @@ function normalizePlayerKitchen(kitchen, lesson, answerScript) {
     score: Number(kitchen?.score || 0),
     lastFoodDropAt: Number(kitchen?.lastFoodDropAt || 0),
     toneQueue: Array.isArray(kitchen?.toneQueue) ? kitchen.toneQueue.map(String).filter((tone) => /^[1-4]$/.test(tone)) : [],
+    dropQueue: Array.isArray(kitchen?.dropQueue) ? kitchen.dropQueue : [],
+    dropQueueSignature: kitchen?.dropQueueSignature || "",
     orders: (kitchen?.orders?.length ? kitchen.orders.slice(0, 1) : []).map((item) => ({ ...normalizeLessonItem(item), done: Boolean(item.done) })),
     ingredients: (kitchen?.ingredients || []).map((item) => normalizeItem(item, lesson, answerScript)),
     pot: (kitchen?.pot || []).map((item) => normalizeItem(item, lesson, answerScript)),
@@ -2308,12 +2331,12 @@ function serveIfReady(group, kitchen, item) {
   kitchen.plate = kitchen.plate.filter((plateItem) => plateItem.id !== item.id);
   delete item.serving;
   if (partialOrder) {
-    group.score = groupScore(group);
+    group.score = Math.max(Number(group.score || 0), groupScore(group));
     group.log = `${getPlayerName()} 完成 ${item.hanzi}，繼續完成同一道菜`;
     return;
   }
   kitchen.score += 1;
-  group.score = groupScore(group);
+  group.score = Number(group.score || 0) + 1;
   group.log = `上菜成功：${item.hanzi}`;
   group.log = `${getPlayerName()} 完成一題，新的題目來了`;
 }
@@ -2373,16 +2396,56 @@ function trimTableIngredients(kitchen) {
 }
 
 function makeRandomIngredient(kitchen) {
-  const source = randomItem(activeDropSources(kitchen));
-  const roll = Math.random();
-  if (roll < 0.60) return makeRandomPinyinPartItem(source);
-  if (roll < 0.80) return makeOrderToneIngredient(source);
-  return makeOrderHanziIngredient(source);
+  const descriptor = nextDropDescriptor(kitchen);
+  if (descriptor.type === "tone") {
+    return makeItem("tone", toneMarks[descriptor.tone] || descriptor.tone, { ...descriptor.source, tone: descriptor.tone });
+  }
+  return makeItem("pinyin", descriptor.label, descriptor.source);
 }
 
 function activeDropSources(kitchen) {
   const sources = sharedActiveOrders(groupForKitchen(kitchen));
   return sources.length ? sources : state.lesson;
+}
+
+function nextDropDescriptor(kitchen) {
+  kitchen.dropQueue = Array.isArray(kitchen.dropQueue) ? kitchen.dropQueue : [];
+  const signature = activeDropSignature(kitchen);
+  if (!kitchen.dropQueue.length || kitchen.dropQueueSignature !== signature) {
+    kitchen.dropQueue = buildDropQueue(kitchen);
+    kitchen.dropQueueSignature = signature;
+  }
+  if (!kitchen.dropQueue.length) {
+    const fallback = randomItem(activeDropSources(kitchen));
+    return { type: "pinyin", label: randomItem(splitPinyinParts(fallback.pinyin)), source: fallback };
+  }
+  const descriptor = kitchen.dropQueue.shift();
+  kitchen.dropQueue.push(descriptor);
+  return descriptor;
+}
+
+function activeDropSignature(kitchen) {
+  return sharedActiveOrders(groupForKitchen(kitchen))
+    .map((order) => `${orderKey(order)}:${(order.servedParts || []).join(".")}`)
+    .join("|");
+}
+
+function buildDropQueue(kitchen) {
+  const group = groupForKitchen(kitchen);
+  const queue = [];
+  sharedActiveOrders(group).forEach((order) => {
+    const served = new Set(order.servedParts || []);
+    lessonItemPieces(order).forEach((piece, index) => {
+      if (served.has(String(index))) return;
+      splitPinyinParts(piece.pinyin).forEach((label) => {
+        queue.push({ type: "pinyin", label, source: piece });
+      });
+      splitToneParts(piece.tone).forEach((tone) => {
+        queue.push({ type: "tone", tone, source: { ...piece, tone } });
+      });
+    });
+  });
+  return shuffle(queue);
 }
 
 function makeHelperHanziIngredient(kitchen) {
