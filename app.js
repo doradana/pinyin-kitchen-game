@@ -1442,11 +1442,12 @@ function lockIngredientPositions(kitchen) {
     const width = item.type === "tone" ? 52 : 64;
     const height = 52;
     if (Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y))) {
-      const position = clampToWorkArea(Number(item.x), Number(item.y), width, height);
-      if (item.x !== position.x || item.y !== position.y) changed = true;
-      item.x = position.x;
-      item.y = position.y;
-      occupied.push({ ...position, width, height });
+      occupied.push({
+        x: Math.round(Number(item.x)),
+        y: Math.round(Number(item.y)),
+        width,
+        height
+      });
       return;
     }
     const position = randomStarterPosition(width, height, occupied);
