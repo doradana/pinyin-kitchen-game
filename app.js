@@ -1401,6 +1401,11 @@ function renderStudent() {
     starterRefillInProgress = false;
     return;
   }
+  if (lockIngredientPositions(kitchen) && !starterRefillInProgress) {
+    starterRefillInProgress = true;
+    saveState();
+    starterRefillInProgress = false;
+  }
   el.assignedToolText.textContent = toolName(kitchen.tool);
   el.scoreText.textContent = group.score;
   if (el.kitchenScoreText) el.kitchenScoreText.textContent = group.score;
@@ -1424,6 +1429,34 @@ function ensureStarterIngredientsVisible(group, kitchen) {
   kitchen.ingredients = starters;
   kitchen.lastFoodDropAt ||= state.startedAt || Date.now();
   return true;
+}
+
+function lockIngredientPositions(kitchen) {
+  if (!kitchen?.ingredients?.length) return false;
+  const kitchenRect = document.querySelector(".kitchen")?.getBoundingClientRect();
+  if (!kitchenRect?.width || !kitchenRect?.height) return false;
+  let changed = false;
+  const occupied = stationRects();
+  kitchen.ingredients.forEach((item) => {
+    const width = item.type === "tone" ? 52 : 64;
+    const height = 52;
+    if (Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y))) {
+      const position = clampToWorkArea(Number(item.x), Number(item.y), width, height);
+      item.x = position.x;
+      item.y = position.y;
+      occupied.push({ ...position, width, height });
+      return;
+    }
+    const position = randomStarterPosition(width, height, occupied);
+    if (!position) return;
+    item.x = position.x;
+    item.y = position.y;
+    item.starterLayout = true;
+    item.starterLayoutVersion = STARTER_LAYOUT_VERSION;
+    occupied.push({ ...position, width, height });
+    changed = true;
+  });
+  return changed;
 }
 
 function renderStudentDoor() {
